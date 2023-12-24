@@ -99,7 +99,7 @@ class TurismoClient:
                 tc.add_callback(MyClass.parse_telem, [self])
 
             @staticmethod
-            def parse_telem(t: Telemetry, context: MyClass):
+            async def parse_telem(t: Telemetry, context: MyClass):
                 self = context
                 ...
 
