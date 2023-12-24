@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from enum import Enum
+from typing import Callable, List
 
 from gt_telem.turismo_client import TurismoClient
 
@@ -17,68 +19,95 @@ class GameState(Enum):
 
 
 class TurismoGame:
-    def __init__(self, is_gt7=True, ps_ip=None):
-        self.game_state: GameState = GameState.NOT_RUNNING
-        self.tc = TurismoClient(is_gt7, ps_ip)
-        self.tc.set_telemetry_update_callback(self._state_watcher, [])
-        self.tc.run()
-        self.tod = self.tc.telemetry.time_of_day_ms if self.tc.telemetry else 0
-        self.check_next = 0
+    on_running: list[Callable] = []
+    on_in_game_menu: list[Callable] = []
+    on_at_track: list[Callable] = []
+    on_in_race: list[Callable] = []
+    on_paused: list[Callable] = []
+    on_race_end: list[Callable] = []
 
-    def _state_watcher(self):
+    def __init__(self, tc: TurismoClient):
+        self.game_state: GameState = GameState.NOT_RUNNING
+        self.check_next = 0
+        self.tod = tc.telemetry.time_of_day_ms if tc.telemetry else 0
+        tc.add_callback(TurismoGame._state_tracker, [self])
+
+    def _change_state(self, state: GameState):
+        events = None
+        match state:
+            case GameState.RUNNING:
+                events = self.on_running
+            case GameState.IN_MENU:
+                events = self.on_in_game_menu
+            case GameState.AT_TRACK:
+                events = self.on_at_track
+            case GameState.IN_RACE:
+                events = self.on_in_race
+            case GameState.PAUSED:
+                events = self.on_paused
+            case GameState.END_RACE:
+                events = self.on_race_end
+            case _:
+                events = []
+        for event in events:
+            event()
+        self.game_state = state
+
+    @staticmethod
+    async def _state_tracker(t, context):
         """
         Try to keep track of what the game is doing. This is remarkably challenging
         and probably not reliable. Things like replays, licenses and non-standard race events
         aren't handled well.
         """
+        self = context
         if self.game_state == GameState.NOT_RUNNING:
-            if self.tc.telemetry is None:
+            if t is None:
                 return
-            self.game_state = GameState.RUNNING
-            logging.info("Game is running.")
+            self._change_state(GameState.RUNNING)
+            logging.debug("Game is running.")
         last = self.game_state
-        t = self.tc.telemetry
 
         match self.game_state:
             case GameState.RUNNING:
                 if t.cars_on_track:
                     if t.is_paused:
-                        logging.info("Race is paused.")
-                        self.game_state = GameState.PAUSED
+                        logging.debug("Race is paused.")
+                        self._change_state(GameState.PAUSED)
                     if t.current_lap == -1:
-                        logging.info("End of a Race.")
-                        self.game_state = GameState.END_RACE
+                        logging.debug("End of a Race.")
+                        self._change_state(GameState.END_RACE)
                     else:
-                        logging.info("In a Race.")
-                        self.game_state = GameState.IN_RACE
+                        logging.debug("In a Race.")
+                        self._change_state(GameState.IN_RACE)
                 else:
                     if t.current_lap > -1:
-                        logging.info("At a track")
-                        self.game_state = GameState.AT_TRACK
+                        logging.debug("At a track")
+                        self._change_state(GameState.AT_TRACK)
                     else:
-                        logging.info("In a menu.")
-                        self.game_state = GameState.IN_MENU
+                        logging.debug("In a menu.")
+                        self._change_state(GameState.IN_MENU)
 
             case GameState.IN_MENU:
                 if t.current_lap > -1:
-                    logging.info("At a track")
-                    self.game_state = GameState.AT_TRACK
+                    logging.debug("At a track")
+                    self._change_state(GameState.AT_TRACK)
 
             case GameState.AT_TRACK:
                 if t.cars_on_track:
-                    logging.info("In a Race.")
-                    self.game_state = GameState.IN_RACE
+                    logging.debug("In a Race.")
+                    self._change_state(GameState.IN_RACE)
                 elif t.current_lap == -1:
-                    logging.info("In a menu.")
-                    self.game_state = GameState.IN_MENU
+                    logging.debug("In a menu.")
+                    self._change_state(GameState.IN_MENU)
 
             case GameState.IN_RACE:
                 if t.is_paused:
-                    logging.info("Race is paused.")
-                    self.game_state = GameState.PAUSED
+                    logging.debug("Race is paused.")
+                    self._change_state(GameState.PAUSED)
                 elif t.current_lap == -1:
-                    logging.info("Race ended.")
-                    self.game_state = GameState.END_RACE
+                    logging.debug("Race ended.")
+                    self._change_state(GameState.END_RACE)
 
             case GameState.PAUSED:
                 if not t.is_paused:
@@ -97,16 +126,16 @@ class TurismoGame:
                         else:
                             self.check_next = 0
                             if t.engine_rpm != self.engine_rpm:
-                                logging.info("Resuming Race")
-                                self.game_state = GameState.IN_RACE
+                                logging.debug("Resuming Race")
+                                self._change_state(GameState.IN_RACE)
                             else:
-                                logging.info("Quit Race")
-                                self.game_state = GameState.END_RACE
+                                logging.debug("Quit Race")
+                                self._change_state(GameState.END_RACE)
 
             case GameState.END_RACE:
                 if not t.is_loading:
-                    logging.info("At a track")
-                    self.game_state = GameState.AT_TRACK
+                    logging.debug("At a track")
+                    self._change_state(GameState.AT_TRACK)
 
             case _:
                 logging.debug(f"Unhandled state: {self.game_state}")

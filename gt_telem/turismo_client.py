@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import copy
 import logging
 import socket
 import threading
+from collections import deque
 from time import sleep
 
 from gt_telem.errors.playstation_errors import (PlayStationNotFoundError,
@@ -18,7 +20,7 @@ class TurismoClient:
     RECEIVE_PORT = 33339
     BIND_PORT = 33340
 
-    def __init__(self, is_gt7: bool = True, ps_ip: str = None, telem_update_callback=None, telem_update_callback_args=None):
+    def __init__(self, is_gt7: bool = True, ps_ip: str = None):
         """
         Initialize TurismoClient.
 
@@ -33,7 +35,9 @@ class TurismoClient:
         if ps and "STANDBY" in ps:
             raise PlayStatonOnStandbyError(ip)
 
+        logging.info(f"Using the {ps} at {ip}")
         self.ip_addr: str = ip
+
         if is_gt7:
             self.RECEIVE_PORT += 400
             self.BIND_PORT += 400
@@ -41,11 +45,10 @@ class TurismoClient:
 
         self._telem_lock: threading.Lock = threading.Lock()
         self._telem: Telemetry = None
-        self._hb: threading.Thread = threading.Thread(
-            target=self._send_heartbeat, daemon=True
-        )
-        self._l: threading.Thread = threading.Thread(target=self._listen, daemon=True)
-        self._callback_exists = None
+
+        self._telem_update_callbacks = {}
+        self._telem_callback_queue = asyncio.LifoQueue(maxsize=1)
+        self._processing_callbacks = False
 
     @property
     def telemetry(self) -> Telemetry:
@@ -64,7 +67,7 @@ class TurismoClient:
     @telemetry.setter
     def telemetry(self, value: Telemetry) -> None:
         """
-        Set the telemetry data.
+        Set the telemetry data and calls any registered callbacks.
 
         Parameters:
         - value (Telemetry): Telemetry data to set.
@@ -72,56 +75,112 @@ class TurismoClient:
         with self._telem_lock:
             self._telem = value
 
-        if self._callback_exists:
-            alive = self._callback_thread.is_alive()
-            if not alive:
-                self._callback_thread.start()
-            #with self._callback_lock:
-                #self._callback(self._callback_args)
+        try:
+            self._telem_callback_queue.put_nowait(value)
+        except asyncio.QueueFull:
+            self._telem_callback_queue.get_nowait()
+            self._telem_callback_queue.put_nowait(value)
+        if not self._processing_callbacks:
+            asyncio.create_task(self._process_telemetry_callbacks())
 
-    @property
-    def telem_dict(self) -> dict:
+    def add_callback(self, callback, args=None):
         """
-        Get the telemetry data as a dictionary.
+        Callback issued when new telemetry is received.
+        Telemetry object is sent as the first parameter, and additional
+        args are passed if specified.
+        IMPORTANT:
+            Callbacks are run off the main thread. This means that
+        state integrity is compromised (`self.` in your callback won't work).
+        To workaround this, declare your callback as a @staticmethod, pass
+        the class instance (self) as an arg, and receive the context of the
+        class in your parameters (after telemetry, which is first).
+        Ex:
+            def __init__(self, tc: TurismoClient):
+                tc.add_callback(MyClass.parse_telem, [self])
 
-        Returns:
-        dict: Telemetry data as a dictionary.
-        """
-        return self.telemetry.as_dict() if self.telemetry else {}
+            @staticmethod
+            def parse_telem(t: Telemetry, context: MyClass):
+                self = context
+                ...
 
-    def set_telemetry_update_callback(self, callback, callback_args):
+        Additionally, the game sends telemetry at the same frequency as the
+        frame rate (~60/s). If your callback takes too long to process and exit,
+        subsequent callbacks will not be invoked until it returns.
         """
-        Function callback when telemetry is updated. Function will
-        be started on its own thread so as to not block the telemetry client.
-        NOTE: updates happen very quickly, usually 60/s. If the callback function
-        does not return before the next update arrives, a new callback will not be issued.
-        """
-        self._callback_exists = True
-        self._callback_thread = threading.Thread(target=callback, args=callback_args, daemon=True)
+        self._telem_update_callbacks[callback] = args
 
     def run(self) -> None:
-        """
-        Start the TurismoClient threads.
-        """
-        self._hb.start()
-        self._l.start()
+        loop = asyncio.get_event_loop()
+        heartbeat_task = loop.create_task(self._send_heartbeat())
+        listen_task = loop.create_task(self._listen(loop))
 
-    def _send_heartbeat(self) -> None:
+        # Run the tasks in the event loop
+        try:
+            loop.run_until_complete(asyncio.gather(heartbeat_task, listen_task))
+        except KeyboardInterrupt:
+            pass
+        finally:
+            # Clean up any resources here if needed
+            loop.run_until_complete(loop.shutdown_asyncgens())
+            loop.close()
+
+    async def _send_heartbeat(self) -> None:
+        logging.info("Starting telemetry heartbeat.")
         msg: bytes = b"A"
         while True:
-            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
-                udp_socket.sendto(msg, (self.ip_addr, self.RECEIVE_PORT))
-            sleep(10)
+            udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            udp_socket.sendto(msg, (self.ip_addr, self.RECEIVE_PORT))
+            udp_socket.close()
+            await asyncio.sleep(10)
 
-    def _listen(self) -> None:
+    async def _listen(self, loop: asyncio.AbstractEventLoop) -> None:
         logging.info(f"Listening for data on {self.ip_addr}:{self.BIND_PORT}")
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
-            udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            udp_socket.bind(("0.0.0.0", self.BIND_PORT))
 
-            while True:
-                data, addr = udp_socket.recvfrom(1024)
-                self._handle_data(data)
+        class MyDatagramProtocol(asyncio.DatagramProtocol):
+            def __init__(self, client):
+                self.client = client
+
+            def datagram_received(self, data, addr):
+                self.client._handle_data(data)
+
+        udp_socket, _ = await loop.create_datagram_endpoint(
+            lambda: MyDatagramProtocol(self),
+            local_addr=("0.0.0.0", self.BIND_PORT)
+        )
+
+        try:
+            await asyncio.Event().wait()  # Keep the event loop running
+        except asyncio.CancelledError:
+            # The task is cancelled when the event loop is stopped
+            pass
+        finally:
+            udp_socket.close()
+
+    async def _process_telemetry_callbacks(self):
+        self._processing_callbacks = True
+        while True:
+            try:
+                # Wait for the next telemetry update callback
+                telemetry_value = await self._telem_callback_queue.get()
+
+                # Call the user-provided callback
+                for cb, args in self._telem_update_callbacks.items():
+                    if args:
+                        await cb(telemetry_value, *args)
+                    else:
+                        await cb(telemetry_value)
+
+                # Optionally introduce a delay here if needed
+                await asyncio.sleep(1 / 60)  # 60 Hz update rate
+
+            except asyncio.CancelledError:
+                # The task is cancelled when the event loop is stopped
+                break
+            except Exception as e:
+                # Handle exceptions during callback processing
+                logging.error(f"Error processing telemetry {cb}: {e}")
+
+        self._processing_callbacks = False
 
     def _handle_data(self, data: bytes) -> None:
         try:
@@ -145,6 +204,7 @@ class TurismoClient:
         else:
             sr: SpanReader = SpanReader(message, "big")
         self._parse_telemetry(sr)
+
 
     def _parse_telemetry(self, sr: SpanReader) -> None:
         self.telemetry = Telemetry(
