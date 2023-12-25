@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        
+        
+        <link rel="shortcut icon" href="../img/favicon.ico">
+        <title>Turismo Client - RaceCrewAI - gt_gelem</title>
+        <link href="../css/bootstrap.min.css" rel="stylesheet">
+        <link href="../css/font-awesome.min.css" rel="stylesheet">
+        <link href="../css/base.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css">
+        <link href="../assets/_mkdocstrings.css" rel="stylesheet">
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+        <script>hljs.highlightAll();</script> 
+    </head>
+
+    <body>
+        <div class="navbar fixed-top navbar-expand-lg navbar-dark bg-primary">
+            <div class="container">
+                <a class="navbar-brand" href="..">RaceCrewAI - gt_gelem</a>
+                <!-- Expander button -->
+                <button type="button" class="navbar-toggler" data-toggle="collapse" data-target="#navbar-collapse">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+
+                <!-- Expanded navigation -->
+                <div id="navbar-collapse" class="navbar-collapse collapse">
+                        <!-- Main navigation -->
+                        <ul class="nav navbar-nav">
+                            <li class="navitem">
+                                <a href=".." class="nav-link">Welcome to MkDocs</a>
+                            </li>
+                            <li class="navitem active">
+                                <a href="./" class="nav-link">Turismo Client</a>
+                            </li>
+                        </ul>
+
+                    <ul class="nav navbar-nav ml-auto">
+                            <li class="nav-item">
+                                <a rel="prev" href=".." class="nav-link">
+                                    <i class="fa fa-arrow-left"></i> Previous
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a rel="next" class="nav-link disabled">
+                                    Next <i class="fa fa-arrow-right"></i>
+                                </a>
+                            </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="row">
+                    <div class="col-md-3"><div class="navbar-light navbar-expand-md bs-sidebar hidden-print affix" role="complementary">
+    <div class="navbar-header">
+        <button type="button" class="navbar-toggler collapsed" data-toggle="collapse" data-target="#toc-collapse" title="Table of Contents">
+            <span class="fa fa-angle-down"></span>
+        </button>
+    </div>
+
+    
+    <div id="toc-collapse" class="navbar-collapse collapse card bg-secondary">
+        <ul class="nav flex-column">
+            
+            <li class="nav-item" data-level="2"><a href="#gt_telem.turismo_client" class="nav-link">turismo_client</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            
+            <li class="nav-item" data-level="2"><a href="#gt_telem.turismo_client.TurismoClient" class="nav-link">TurismoClient</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+        </ul>
+    </div>
+</div></div>
+                    <div class="col-md-9" role="main">
+
+<div class="doc doc-object doc-module">
+
+
+
+<a id="gt_telem.turismo_client"></a>
+  <div class="doc doc-contents first">
+
+  
+
+  <div class="doc doc-children">
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-class">
+
+
+
+
+<h2 id="gt_telem.turismo_client.TurismoClient" class="doc doc-heading">
+          <code>TurismoClient</code>
+
+
+</h2>
+
+
+  <div class="doc doc-contents ">
+
+
+            <details class="quote">
+              <summary>Source code in <code>gt_telem\turismo_client.py</code></summary>
+              <pre class="highlight"><code class="language-python">class TurismoClient:
+    RECEIVE_PORT = 33339
+    BIND_PORT = 33340
+
+    def __init__(self, is_gt7: bool = True, ps_ip: str = None):
+        """
+        Initialize TurismoClient.
+
+        Parameters:
+            - is_gt7 (bool): Flag indicating whether it's Gran Turismo 7. Default is True.
+            - ps_ip (str): PlayStation IP address. If None, it will be discovered.
+        """
+        ip, ps = get_ps_ip_type()
+        ip = ip or ps_ip
+        if not ip:
+            raise PlayStationNotFoundError()
+        if ps and "STANDBY" in ps:
+            raise PlayStatonOnStandbyError(ip)
+
+        logging.info(f"Using the {ps} at {ip}")
+        self.ip_addr: str = ip
+
+        if is_gt7:
+            self.RECEIVE_PORT += 400
+            self.BIND_PORT += 400
+        self._crypto: PDEncyption = PDEncyption(is_gt7)
+
+        self._telem_lock: threading.Lock = threading.Lock()
+        self._telem: Telemetry = None
+
+        self._telem_update_callbacks = {}
+        self._telem_callback_queue = asyncio.LifoQueue(maxsize=1)
+        self._processing_callbacks = False
+
+    @property
+    def telemetry(self) -&gt; Telemetry:
+        """
+        Get a copy of the telemetry data.
+
+        Returns:
+            Telemetry: A copy of the telemetry data.
+        """
+        if not self._telem:
+            return None
+        with self._telem_lock:
+            cpy: Telemetry = copy.deepcopy(self._telem)
+        return cpy
+
+    @telemetry.setter
+    def _telemetry(self, value: Telemetry) -&gt; None:
+        """
+        Set the telemetry data and call any registered callbacks.
+
+        Parameters:
+            - value (Telemetry): Telemetry data to set.
+        """
+        with self._telem_lock:
+            self._telem = value
+
+        try:
+            self._telem_callback_queue.put_nowait(value)
+        except asyncio.QueueFull:
+            self._telem_callback_queue.get_nowait()
+            self._telem_callback_queue.put_nowait(value)
+        if not self._processing_callbacks:
+            asyncio.create_task(self._process_telemetry_callbacks())
+
+    def register_callback(self, callback, args=None):
+        """
+        Register an awaitable callback to be invoked when new telemetry is received.
+
+        The telemetry object is sent as the first parameter, and additional
+        args can be passed if specified.
+
+        IMPORTANT:
+        - Callbacks are executed off the main thread, potentially compromising
+          state integrity (e.g., using `self.` within your callback won't work).
+        - To work around this limitation, declare your callback as a @staticmethod,
+          pass the class instance (self) as an argument, and receive the context of
+          the class in your parameters (after telemetry, which is the first).
+
+        Examples:
+            def __init__(self, tc: TurismoClient):
+                tc.add_callback(MyClass.parse_telem, [self])
+
+            @staticmethod
+            async def parse_telem(t: Telemetry, context: MyClass):
+                self = context
+                # Your callback logic here ...
+
+        Additionally, note that the game sends telemetry at the same frequency as
+        the frame rate (~60/s). If your callback takes too long to process and exit,
+        subsequent callbacks will not be invoked until it returns.
+        """
+        self._telem_update_callbacks[callback] = args
+
+    def deregister_callback(self, callback):
+        """
+        Deregister a callback.
+
+        Parameters:
+            - callback: Callback to deregister.
+        """
+        self._telem_update_callbacks.pop(callback)
+
+    def run(self) -&gt; None:
+        """
+        Start the telemetry client and run the event loop.
+        """
+        loop = asyncio.get_event_loop()
+        heartbeat_task = loop.create_task(self._send_heartbeat())
+        listen_task = loop.create_task(self._listen(loop))
+
+        # Run the tasks in the event loop
+        try:
+            loop.run_until_complete(asyncio.gather(heartbeat_task, listen_task))
+        except KeyboardInterrupt:
+            pass
+        finally:
+            # Clean up any resources here if needed
+            loop.run_until_complete(loop.shutdown_asyncgens())
+            loop.close()
+
+    async def _send_heartbeat(self) -&gt; None:
+        """
+        Send heartbeat messages at regular intervals to keep the telemetry stream alive.
+        """
+        logging.info("Starting telemetry heartbeat.")
+        msg: bytes = b"A"
+        while True:
+            udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            udp_socket.sendto(msg, (self.ip_addr, self.RECEIVE_PORT))
+            udp_socket.close()
+            await asyncio.sleep(10)
+
+    async def _listen(self, loop: asyncio.AbstractEventLoop) -&gt; None:
+        """
+        Listen for incoming telemetry data.
+
+        Parameters:
+            - loop: The asyncio event loop.
+        """
+        logging.info(f"Listening for data on {self.ip_addr}:{self.BIND_PORT}")
+
+        class MyDatagramProtocol(asyncio.DatagramProtocol):
+            def __init__(self, client):
+                self.client = client
+
+            def datagram_received(self, data, addr):
+                self.client._handle_data(data)
+
+        udp_socket, _ = await loop.create_datagram_endpoint(
+            lambda: MyDatagramProtocol(self),
+            local_addr=("0.0.0.0", self.BIND_PORT)
+        )
+
+        try:
+            await asyncio.Event().wait()  # Keep the event loop running
+        except asyncio.CancelledError:
+            # The task is cancelled when the event loop is stopped
+            pass
+        finally:
+            udp_socket.close()
+
+    async def _process_telemetry_callbacks(self):
+        """
+        Process telemetry callbacks.
+        """
+        self._processing_callbacks = True
+        while True:
+            try:
+                # Wait for the next telemetry update callback
+                telemetry_value = await self._telem_callback_queue.get()
+
+                # Call the user-provided callback
+                for cb, args in self._telem_update_callbacks.items():
+                    if args:
+                        await cb(telemetry_value, *args)
+                    else:
+                        await cb(telemetry_value)
+
+                # Optionally introduce a delay here if needed
+                await asyncio.sleep(1 / 60)  # 60 Hz update rate
+
+            except asyncio.CancelledError:
+                # The task is cancelled when the event loop is stopped
+                break
+            except Exception as e:
+                # Handle exceptions during callback processing
+                logging.error(f"Error processing telemetry {cb}: {e}")
+
+        self._processing_callbacks = False
+
+    def _handle_data(self, data: bytes) -&gt; None:
+        """
+        Handle incoming telemetry data.
+
+        Parameters:
+            - data: Raw telemetry data.
+        """
+        try:
+            message: bytes = self._crypto.decrypt(data)
+        except Exception as e:
+            logging.debug(f"Failed to decrypt. Error: {e}. Wrong system?")
+            return
+        # First 4 bytes are header and indicate which system this is
+        try:
+            header: str = message[:4].decode("ascii")
+        except Exception as e:
+            logging.debug(f"Not sure what this is \n{message[:4]}. Error: {e}")
+            return
+        message: bytes = message[4:]
+        if not header in ["0S7G", "G6S0"]:
+            # bad data
+            logging.debug(f"Not sure what this is \n{header}")
+            return
+        if header == "0S7G":
+            sr: SpanReader = SpanReader(message, "little")
+        else:
+            sr: SpanReader = SpanReader(message, "big")
+        self._parse_telemetry(sr)
+
+    def _parse_telemetry(self, sr: SpanReader) -&gt; None:
+        """
+        Parse telemetry data from SpanReader and update the telemetry property.
+
+        Parameters:
+            - sr: SpanReader containing telemetry data.
+        """
+        self.telemetry = Telemetry(
+            position_x=sr.read_single(),
+            position_y=sr.read_single(),
+            position_z=sr.read_single(),
+            velocity_x=sr.read_single(),
+            velocity_y=sr.read_single(),
+            velocity_z=sr.read_single(),
+            rotation_x=sr.read_single(),
+            rotation_y=sr.read_single(),
+            rotation_z=sr.read_single(),
+            orientation=sr.read_single(),
+            ang_vel_x=sr.read_single(),
+            ang_vel_y=sr.read_single(),
+            ang_vel_z=sr.read_single(),
+            body_height=sr.read_single(),
+            engine_rpm=sr.read_single(),
+            iv=sr.read_single(),
+            fuel_level=sr.read_single(),
+            fuel_capacity=sr.read_single(),
+            speed_mps=sr.read_single(),
+            boost_pressure=sr.read_single(),
+            oil_pressure=sr.read_single(),
+            water_temp=sr.read_single(),
+            oil_temp=sr.read_single(),
+            tire_fl_temp=sr.read_single(),
+            tire_fr_temp=sr.read_single(),
+            tire_rl_temp=sr.read_single(),
+            tire_rr_temp=sr.read_single(),
+            packet_id=sr.read_int32(),
+            current_lap=sr.read_int16(),
+            total_laps=sr.read_int16(),
+            best_lap_time_ms=sr.read_int32(),
+            last_lap_time_ms=sr.read_int32(),
+            time_of_day_ms=sr.read_int32(),
+            race_start_pos=sr.read_int16(),
+            total_cars=sr.read_int16(),
+            min_alert_rpm=sr.read_int16(),
+            max_alert_rpm=sr.read_int16(),
+            calc_max_speed=sr.read_int16(),
+            flags=sr.read_int16(),
+            bits=sr.read_byte(),
+            throttle=sr.read_byte(),
+            brake=sr.read_byte(),
+            empty=sr.read_byte(),
+            road_plane_x=sr.read_single(),
+            road_plane_y=sr.read_single(),
+            road_plane_z=sr.read_single(),
+            road_plane_dist=sr.read_single(),
+            wheel_fl_rps=sr.read_single(),
+            wheel_fr_rps=sr.read_single(),
+            wheel_rl_rps=sr.read_single(),
+            wheel_rr_rps=sr.read_single(),
+            tire_fl_radius=sr.read_single(),
+            tire_fr_radius=sr.read_single(),
+            tire_rl_radius=sr.read_single(),
+            tire_rr_radius=sr.read_single(),
+            tire_fl_sus_height=sr.read_single(),
+            tire_fr_sus_height=sr.read_single(),
+            tire_rl_sus_height=sr.read_single(),
+            tire_rr_sus_height=sr.read_single(),
+            unused1=sr.read_int32(),
+            unused2=sr.read_int32(),
+            unused3=sr.read_int32(),
+            unused4=sr.read_int32(),
+            unused5=sr.read_int32(),
+            unused6=sr.read_int32(),
+            unused7=sr.read_int32(),
+            unused8=sr.read_int32(),
+            clutch_pedal=sr.read_single(),
+            clutch_engagement=sr.read_single(),
+            trans_rpm=sr.read_single(),
+            trans_top_speed=sr.read_single(),
+            gear1=sr.read_single(),
+            gear2=sr.read_single(),
+            gear3=sr.read_single(),
+            gear4=sr.read_single(),
+            gear5=sr.read_single(),
+            gear6=sr.read_single(),
+            gear7=sr.read_single(),
+            gear8=sr.read_single(),
+            car_code=sr.read_int32(),
+        )</code></pre>
+            </details>
+
+  
+
+  <div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+
+<h3 id="gt_telem.turismo_client.TurismoClient.telemetry" class="doc doc-heading">
+          <code class="highlight language-python">telemetry: Telemetry</code>
+  
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+</h3>
+
+
+  <div class="doc doc-contents ">
+  
+      <p>Get a copy of the telemetry data.</p>
+
+
+
+  <p><strong>Returns:</strong></p>
+  <table>
+    <thead>
+      <tr>
+<th>Name</th>        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+        <tr>
+<td><code>Telemetry</code></td>          <td>
+                <code><span title="gt_telem.models.telemetry.Telemetry">Telemetry</span></code>
+          </td>
+          <td>
+            <div class="doc-md-description">
+              <p>A copy of the telemetry data.</p>
+            </div>
+          </td>
+        </tr>
+    </tbody>
+  </table>
+  </div>
+
+</div>
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+
+
+<h3 id="gt_telem.turismo_client.TurismoClient.__init__" class="doc doc-heading">
+          <code class="highlight language-python">__init__(is_gt7=True, ps_ip=None)</code>
+
+</h3>
+
+
+  <div class="doc doc-contents ">
+  
+      <p>Initialize TurismoClient.</p>
+
+
+
+  <p><strong>Parameters:</strong></p>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Description</th>
+        <th>Default</th>
+      </tr>
+    </thead>
+    <tbody>
+        <tr>
+          <td><code>-</code></td>
+          <td>
+                <code>is_gt7 (bool</code>
+          </td>
+          <td>
+            <div class="doc-md-description">
+              <p>Flag indicating whether it's Gran Turismo 7. Default is True.</p>
+            </div>
+          </td>
+          <td>
+              <em>required</em>
+          </td>
+        </tr>
+        <tr>
+          <td><code>-</code></td>
+          <td>
+                <code>ps_ip (str</code>
+          </td>
+          <td>
+            <div class="doc-md-description">
+              <p>PlayStation IP address. If None, it will be discovered.</p>
+            </div>
+          </td>
+          <td>
+              <em>required</em>
+          </td>
+        </tr>
+    </tbody>
+  </table>
+
+          <details class="quote">
+            <summary>Source code in <code>gt_telem\turismo_client.py</code></summary>
+            <pre class="highlight"><code class="language-python">def __init__(self, is_gt7: bool = True, ps_ip: str = None):
+    """
+    Initialize TurismoClient.
+
+    Parameters:
+        - is_gt7 (bool): Flag indicating whether it's Gran Turismo 7. Default is True.
+        - ps_ip (str): PlayStation IP address. If None, it will be discovered.
+    """
+    ip, ps = get_ps_ip_type()
+    ip = ip or ps_ip
+    if not ip:
+        raise PlayStationNotFoundError()
+    if ps and "STANDBY" in ps:
+        raise PlayStatonOnStandbyError(ip)
+
+    logging.info(f"Using the {ps} at {ip}")
+    self.ip_addr: str = ip
+
+    if is_gt7:
+        self.RECEIVE_PORT += 400
+        self.BIND_PORT += 400
+    self._crypto: PDEncyption = PDEncyption(is_gt7)
+
+    self._telem_lock: threading.Lock = threading.Lock()
+    self._telem: Telemetry = None
+
+    self._telem_update_callbacks = {}
+    self._telem_callback_queue = asyncio.LifoQueue(maxsize=1)
+    self._processing_callbacks = False</code></pre>
+          </details>
+  </div>
+
+</div>
+
+
+<div class="doc doc-object doc-function">
+
+
+
+
+<h3 id="gt_telem.turismo_client.TurismoClient.deregister_callback" class="doc doc-heading">
+          <code class="highlight language-python">deregister_callback(callback)</code>
+
+</h3>
+
+
+  <div class="doc doc-contents ">
+  
+      <p>Deregister a callback.</p>
+
+
+
+  <p><strong>Parameters:</strong></p>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Description</th>
+        <th>Default</th>
+      </tr>
+    </thead>
+    <tbody>
+        <tr>
+          <td><code>-</code></td>
+          <td>
+                <code>callback</code>
+          </td>
+          <td>
+            <div class="doc-md-description">
+              <p>Callback to deregister.</p>
+            </div>
+          </td>
+          <td>
+              <em>required</em>
+          </td>
+        </tr>
+    </tbody>
+  </table>
+
+          <details class="quote">
+            <summary>Source code in <code>gt_telem\turismo_client.py</code></summary>
+            <pre class="highlight"><code class="language-python">def deregister_callback(self, callback):
+    """
+    Deregister a callback.
+
+    Parameters:
+        - callback: Callback to deregister.
+    """
+    self._telem_update_callbacks.pop(callback)</code></pre>
+          </details>
+  </div>
+
+</div>
+
+
+<div class="doc doc-object doc-function">
+
+
+
+
+<h3 id="gt_telem.turismo_client.TurismoClient.register_callback" class="doc doc-heading">
+          <code class="highlight language-python">register_callback(callback, args=None)</code>
+
+</h3>
+
+
+  <div class="doc doc-contents ">
+  
+      <p>Register an awaitable callback to be invoked when new telemetry is received.</p>
+<p>The telemetry object is sent as the first parameter, and additional
+args can be passed if specified.</p>
+<p>IMPORTANT:
+- Callbacks are executed off the main thread, potentially compromising
+  state integrity (e.g., using <code>self.</code> within your callback won't work).
+- To work around this limitation, declare your callback as a @staticmethod,
+  pass the class instance (self) as an argument, and receive the context of
+  the class in your parameters (after telemetry, which is the first).</p>
+
+
+
+<p><strong>Examples:</strong></p>
+    <p>def <strong>init</strong>(self, tc: TurismoClient):
+    tc.add_callback(MyClass.parse_telem, [self])</p>
+<p>@staticmethod
+async def parse_telem(t: Telemetry, context: MyClass):
+    self = context
+    # Your callback logic here ...</p>
+      <p>Additionally, note that the game sends telemetry at the same frequency as
+the frame rate (~60/s). If your callback takes too long to process and exit,
+subsequent callbacks will not be invoked until it returns.</p>
+
+          <details class="quote">
+            <summary>Source code in <code>gt_telem\turismo_client.py</code></summary>
+            <pre class="highlight"><code class="language-python">def register_callback(self, callback, args=None):
+    """
+    Register an awaitable callback to be invoked when new telemetry is received.
+
+    The telemetry object is sent as the first parameter, and additional
+    args can be passed if specified.
+
+    IMPORTANT:
+    - Callbacks are executed off the main thread, potentially compromising
+      state integrity (e.g., using `self.` within your callback won't work).
+    - To work around this limitation, declare your callback as a @staticmethod,
+      pass the class instance (self) as an argument, and receive the context of
+      the class in your parameters (after telemetry, which is the first).
+
+    Examples:
+        def __init__(self, tc: TurismoClient):
+            tc.add_callback(MyClass.parse_telem, [self])
+
+        @staticmethod
+        async def parse_telem(t: Telemetry, context: MyClass):
+            self = context
+            # Your callback logic here ...
+
+    Additionally, note that the game sends telemetry at the same frequency as
+    the frame rate (~60/s). If your callback takes too long to process and exit,
+    subsequent callbacks will not be invoked until it returns.
+    """
+    self._telem_update_callbacks[callback] = args</code></pre>
+          </details>
+  </div>
+
+</div>
+
+
+<div class="doc doc-object doc-function">
+
+
+
+
+<h3 id="gt_telem.turismo_client.TurismoClient.run" class="doc doc-heading">
+          <code class="highlight language-python">run()</code>
+
+</h3>
+
+
+  <div class="doc doc-contents ">
+  
+      <p>Start the telemetry client and run the event loop.</p>
+
+          <details class="quote">
+            <summary>Source code in <code>gt_telem\turismo_client.py</code></summary>
+            <pre class="highlight"><code class="language-python">def run(self) -&gt; None:
+    """
+    Start the telemetry client and run the event loop.
+    """
+    loop = asyncio.get_event_loop()
+    heartbeat_task = loop.create_task(self._send_heartbeat())
+    listen_task = loop.create_task(self._listen(loop))
+
+    # Run the tasks in the event loop
+    try:
+        loop.run_until_complete(asyncio.gather(heartbeat_task, listen_task))
+    except KeyboardInterrupt:
+        pass
+    finally:
+        # Clean up any resources here if needed
+        loop.run_until_complete(loop.shutdown_asyncgens())
+        loop.close()</code></pre>
+          </details>
+  </div>
+
+</div>
+
+
+
+  </div>
+
+  </div>
+
+</div>
+
+
+
+
+  </div>
+
+  </div>
+
+</div></div>
+            </div>
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+            <p>Documentation built with <a href="https://www.mkdocs.org/">MkDocs</a>.</p>
+        </footer>
+        <script src="../js/jquery-3.6.0.min.js"></script>
+        <script src="../js/bootstrap.min.js"></script>
+        <script>
+            var base_url = "..",
+                shortcuts = {"help": 191, "next": 78, "previous": 80, "search": 83};
+        </script>
+        <script src="../js/base.js"></script>
+
+        <div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+
+    </body>
+</html>
