@@ -47,7 +47,3 @@ push = true
 "gt_telem/__init__.py" = [
     '__version__ = "{version}"'
 ]
-"README.md" = [
-    "{version}",
-    "{pep440_version}",
-]

@@ -1,4 +1,4 @@
-# Gran Turismo Telemetry {version}
+# Gran Turismo Telemetry
 Python library for interfacing with Polyphony Digital's telemetry service for motion rigs in GT6/GTS/GT7 (maybe older?)
 
 ## Features
