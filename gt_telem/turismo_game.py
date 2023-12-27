@@ -30,7 +30,7 @@ class TurismoGame:
         self.game_state: GameState = GameState.NOT_RUNNING
         self.check_next = 0
         self.tod = tc.telemetry.time_of_day_ms if tc.telemetry else 0
-        tc.add_callback(TurismoGame._state_tracker, [self])
+        tc.register_callback(TurismoGame._state_tracker, [self])
 
     def _change_state(self, state: GameState):
         events = None

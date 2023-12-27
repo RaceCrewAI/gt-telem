@@ -311,7 +311,7 @@ class Telemetry(TelemetryPacket):
     @property
     def asm_active(self) -> bool:
         """
-        Check if the ASM (Anti-lock Braking System) is active.
+        Check if the ASM (Active Stability Management) is active.
         """
         return bool(11 & self.flags)
 

@@ -20,14 +20,16 @@ class TurismoClient:
     RECEIVE_PORT = 33339
     BIND_PORT = 33340
 
-    def __init__(self, is_gt7: bool = True, ps_ip: str = None):
+    def __init__(self, is_gt7: bool=True, ps_ip: str=None):
         """
         Initialize TurismoClient.
 
         Parameters:
-        - is_gt7 (bool): Flag indicating whether it's Gran Turismo 7. Default is True.
-        - ps_ip (str): PlayStation IP address. If None, it will be discovered.
+            - is_gt7 (bool): Flag indicating whether it's Gran Turismo 7. Default is True.
+            - ps_ip (str): PlayStation IP address. If None, it will be discovered.
+            - cancellation_token (asyncio.Event): Set token to shut down threads and return from run()
         """
+        self._cancellation_token = None
         ip, ps = get_ps_ip_type()
         ip = ip or ps_ip
         if not ip:
@@ -56,7 +58,7 @@ class TurismoClient:
         Get a copy of the telemetry data.
 
         Returns:
-        Telemetry: A copy of the telemetry data.
+            Telemetry: A copy of the telemetry data.
         """
         if not self._telem:
             return None
@@ -67,10 +69,10 @@ class TurismoClient:
     @telemetry.setter
     def telemetry(self, value: Telemetry) -> None:
         """
-        Set the telemetry data and calls any registered callbacks.
+        Set the telemetry data and call any registered callbacks.
 
         Parameters:
-        - value (Telemetry): Telemetry data to set.
+            - value (Telemetry): Telemetry data to set.
         """
         with self._telem_lock:
             self._telem = value
@@ -83,33 +85,52 @@ class TurismoClient:
         if not self._processing_callbacks:
             asyncio.create_task(self._process_telemetry_callbacks())
 
-    def add_callback(self, callback, args=None):
+    def register_callback(self, callback, args=None):
         """
-        Callback issued when new telemetry is received.
-        Telemetry object is sent as the first parameter, and additional
-        args are passed if specified.
-        IMPORTANT:
-            Callbacks are run off the main thread. This means that
-        state integrity is compromised (`self.` in your callback won't work).
-        To workaround this, declare your callback as a @staticmethod, pass
-        the class instance (self) as an arg, and receive the context of the
-        class in your parameters (after telemetry, which is first).
-        Ex:
+        Register an awaitable callback to be invoked when new telemetry is received.
+
+        The telemetry object is sent as the first parameter, and additional
+        args can be passed if specified.
+
+        Callbacks are executed off the main thread, potentially compromising
+        state integrity (e.g., using `self.` within your callback won't work).
+        To work around this limitation, declare your callback as a @staticmethod,
+        pass the class instance (self) as an argument, and receive the context of
+        the class in your parameters (after telemetry, which is the first).
+
+        .. code-block:: python
+
             def __init__(self, tc: TurismoClient):
                 tc.add_callback(MyClass.parse_telem, [self])
 
             @staticmethod
             async def parse_telem(t: Telemetry, context: MyClass):
                 self = context
-                ...
 
-        Additionally, the game sends telemetry at the same frequency as the
-        frame rate (~60/s). If your callback takes too long to process and exit,
+
+        Additionally, note that the game sends telemetry at the same frequency as
+        the frame rate (~60/s). If your callback takes too long to process and exit,
         subsequent callbacks will not be invoked until it returns.
         """
         self._telem_update_callbacks[callback] = args
 
-    def run(self) -> None:
+    def deregister_callback(self, callback):
+        """
+        Deregister a callback.
+
+        Parameters:
+            - callback: Callback to deregister.
+        """
+        self._telem_update_callbacks.pop(callback)
+
+    def run(self, cancellation_token: asyncio.Event=None) -> None:
+        """
+        Start the telemetry client and run the event loop.
+
+        Parameters:
+            - cancellation_token (asyncio.Event): Set token to shut down threads and return from run()
+        """
+        self._cancellation_token = cancellation_token or asyncio.Event()
         loop = asyncio.get_event_loop()
         heartbeat_task = loop.create_task(self._send_heartbeat())
         listen_task = loop.create_task(self._listen(loop))
@@ -118,22 +139,31 @@ class TurismoClient:
         try:
             loop.run_until_complete(asyncio.gather(heartbeat_task, listen_task))
         except KeyboardInterrupt:
-            pass
+            self._cancellation_token.set()
         finally:
             # Clean up any resources here if needed
             loop.run_until_complete(loop.shutdown_asyncgens())
             loop.close()
 
     async def _send_heartbeat(self) -> None:
+        """
+        Send heartbeat messages at regular intervals to keep the telemetry stream alive.
+        """
         logging.info("Starting telemetry heartbeat.")
         msg: bytes = b"A"
-        while True:
+        while not self._cancellation_token.is_set():
             udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             udp_socket.sendto(msg, (self.ip_addr, self.RECEIVE_PORT))
             udp_socket.close()
             await asyncio.sleep(10)
 
     async def _listen(self, loop: asyncio.AbstractEventLoop) -> None:
+        """
+        Listen for incoming telemetry data.
+
+        Parameters:
+            - loop: The asyncio event loop.
+        """
         logging.info(f"Listening for data on {self.ip_addr}:{self.BIND_PORT}")
 
         class MyDatagramProtocol(asyncio.DatagramProtocol):
@@ -147,16 +177,13 @@ class TurismoClient:
             lambda: MyDatagramProtocol(self),
             local_addr=("0.0.0.0", self.BIND_PORT)
         )
-
-        try:
-            await asyncio.Event().wait()  # Keep the event loop running
-        except asyncio.CancelledError:
-            # The task is cancelled when the event loop is stopped
-            pass
-        finally:
-            udp_socket.close()
+        await self._cancellation_token.wait()
+        udp_socket.close()
 
     async def _process_telemetry_callbacks(self):
+        """
+        Process telemetry callbacks.
+        """
         self._processing_callbacks = True
         while True:
             try:
@@ -183,6 +210,12 @@ class TurismoClient:
         self._processing_callbacks = False
 
     def _handle_data(self, data: bytes) -> None:
+        """
+        Handle incoming telemetry data.
+
+        Parameters:
+            - data: Raw telemetry data.
+        """
         try:
             message: bytes = self._crypto.decrypt(data)
         except Exception as e:
@@ -205,8 +238,13 @@ class TurismoClient:
             sr: SpanReader = SpanReader(message, "big")
         self._parse_telemetry(sr)
 
-
     def _parse_telemetry(self, sr: SpanReader) -> None:
+        """
+        Parse telemetry data from SpanReader and update the telemetry property.
+
+        Parameters:
+            - sr: SpanReader containing telemetry data.
+        """
         self.telemetry = Telemetry(
             position_x=sr.read_single(),
             position_y=sr.read_single(),
