@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from datetime import datetime
 
 from gt_telem.models.helpers import format_time, format_time_of_day

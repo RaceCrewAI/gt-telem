@@ -1,6 +1,3 @@
-from __future__ import annotations
-
-
 class PlayStationNotFoundError(Exception):
     def __init__(self, message="Playstation not found on this network."):
         super().__init__(message)

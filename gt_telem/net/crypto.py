@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import struct
 
 from salsa20 import Salsa20_xor
