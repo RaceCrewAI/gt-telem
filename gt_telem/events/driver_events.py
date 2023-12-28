@@ -3,9 +3,9 @@ from typing import Callable, List
 from gt_telem.turismo_client import TurismoClient
 
 
-class TurismoDriver:
+class DriverEvents:
     """
-    TurismoDriver class for tracking driver-related events in Gran Turismo using telemetry.
+    DriverEvents class for tracking driver-related events in Gran Turismo using telemetry.
 
     Attributes:
         on_gear_change (List[Callable]): List of callbacks to be executed when the current gear changes.
@@ -22,7 +22,7 @@ class TurismoDriver:
 
     Methods:
         __init__(self, tc: TurismoClient):
-            Initializes the TurismoDriver instance and registers the _state_tracker callback with the provided TurismoClient.
+            Initializes the DriverEvents instance and registers the _state_tracker callback with the provided TurismoClient.
 
         _state_tracker(t, context):
             Callback function to track driver-related events based on telemetry data.
@@ -30,13 +30,13 @@ class TurismoDriver:
     Usage:
         # Example usage:
         tc = TurismoClient()
-        driver = TurismoDriver(tc)
+        driver = DriverEvents(tc)
         driver.on_gear_change.append(lambda: print("Gear changed!"))
         driver.on_flash_lights.append(lambda: print("High beams activated!"))
         # Add more event callbacks as needed.
 
         # Start the TurismoClient
-        asyncio.run(tc.run())
+        tc.run()
     """
 
     on_gear_change: list[Callable] = []
@@ -53,12 +53,12 @@ class TurismoDriver:
 
     def __init__(self, tc: TurismoClient):
         """
-        Initialize the TurismoDriver instance.
+        Initialize the DriverEvents instance.
 
         Parameters:
             tc (TurismoClient): The TurismoClient instance to track telemetry.
         """
-        tc.register_callback(TurismoDriver._state_tracker, [self])
+        tc.register_callback(DriverEvents._state_tracker, [self])
         self.last = tc.telemetry
         self.above_min_alert_rpm = False
         self.above_max_alert_rpm = False
@@ -70,7 +70,7 @@ class TurismoDriver:
 
         Parameters:
             t: Telemetry data.
-            context: The TurismoDriver instance.
+            context: The DriverEvents instance.
         """
         self = context
         if self.last.current_gear != t.current_gear:

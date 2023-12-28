@@ -16,7 +16,7 @@ class GameState(Enum):
     END_RACE = 6
 
 
-class TurismoGame:
+class GameEvents:
     on_running: list[Callable] = []
     on_in_game_menu: list[Callable] = []
     on_at_track: list[Callable] = []
@@ -28,7 +28,7 @@ class TurismoGame:
         self.game_state: GameState = GameState.NOT_RUNNING
         self.check_next = 0
         self.tod = tc.telemetry.time_of_day_ms if tc.telemetry else 0
-        tc.register_callback(TurismoGame._state_tracker, [self])
+        tc.register_callback(GameEvents._state_tracker, [self])
 
     def _change_state(self, state: GameState):
         events = None

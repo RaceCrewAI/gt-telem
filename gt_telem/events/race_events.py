@@ -3,9 +3,9 @@ from typing import Callable, List
 from gt_telem.turismo_client import TurismoClient
 
 
-class TurismoRace:
+class RaceEvents:
     """
-    TurismoRace class for tracking race events in Gran Turismo using telemetry.
+    RaceEvents class for tracking race events in Gran Turismo using telemetry.
 
     Attributes:
         on_race_start (List[Callable]): List of callbacks to be executed when a race starts.
@@ -15,7 +15,7 @@ class TurismoRace:
 
     Methods:
         __init__(self, tc: TurismoClient):
-            Initializes the TurismoRace instance and registers the _state_tracker callback with the provided TurismoClient.
+            Initializes the RaceEvents instance and registers the _state_tracker callback with the provided TurismoClient.
 
         _state_tracker(t, context):
             Callback function to track race events based on telemetry data.
@@ -23,7 +23,7 @@ class TurismoRace:
     Usage:
         # Example usage:
         tc = TurismoClient()
-        race = TurismoRace(tc)
+        race = RaceEvents(tc)
         race.on_race_start.append(lambda: print("Race started!"))
         race.on_lap_change.append(lambda: print("Lap changed!"))
         race.on_best_lap_time.append(lambda: print("Best lap time changed!"))
@@ -40,12 +40,12 @@ class TurismoRace:
 
     def __init__(self, tc: TurismoClient):
         """
-        Initialize the TurismoRace instance.
+        Initialize the RaceEvents instance.
 
         Parameters:
             tc (TurismoClient): The TurismoClient instance to track telemetry.
         """
-        tc.register_callback(TurismoRace._state_tracker, [self])
+        tc.register_callback(RaceEvents._state_tracker, [self])
         self.last = tc.telemetry
 
     @staticmethod
@@ -55,7 +55,7 @@ class TurismoRace:
 
         Parameters:
             t: Telemetry data.
-            context: The TurismoRace instance.
+            context: The RaceEvents instance.
         """
         self = context
         if self.last.lap == 0 and t.lap == 1:

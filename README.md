@@ -34,7 +34,8 @@ tc.run()
 Here's a more complex example of a telemetry recorder that hooks into race start, pause, and race end:
 
 ```python
-from gt_telem import TurismoClient, TurismoGame
+from gt_telem import TurismoClient
+from gt_telem.events import GameEvents
 from gt_telem.errors.playstation_errors import *
 
 class MySimpleTelemetryRecorder():
@@ -66,11 +67,11 @@ if __name__ == "__main__":
         print("Maybe I'm on the wrong network")
         print(e)
     else:
-        tg = TurismoGame(tc)
+        ge = GameEvents(tc)
         mstr = MySimpleTelemetryRecorder(tc)
-        tg.on_in_race.append(mstr.start)
-        tg.on_race_end.append(mstr.stop)
-        tg.on_paused.append(mstr.stop)
+        ge.on_in_race.append(mstr.start)
+        ge.on_race_end.append(mstr.stop)
+        ge.on_paused.append(mstr.stop)
         print("Listening for telemetry. CTRL+C to stop")
         tc.run()
 
