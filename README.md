@@ -44,10 +44,10 @@ class MySimpleTelemetryRecorder():
         self.storage = []
 
     def start(self):
-        tc.register_callback(MySimpleTelemetryRecorder.receive_telem, [self])
+        self.tc.register_callback(MySimpleTelemetryRecorder.receive_telem, [self])
 
     def stop(self):
-        self.deregister_callback(MySimpleTelemetryRecorder.receive_telem)
+        self.tc.deregister_callback(MySimpleTelemetryRecorder.receive_telem)
         # save self.storage somewhere
 
     @staticmethod

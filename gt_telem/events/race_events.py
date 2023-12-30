@@ -58,14 +58,16 @@ class RaceEvents:
             context: The RaceEvents instance.
         """
         self = context
-        if self.last:
-            if self.last.current_lap == 0 and t.current_lap == 1:
-                [e() for e in self.on_race_start]
-            if self.last.current_lap != t.current_lap:
-                [e() for e in self.on_lap_change]
-            if self.last.best_lap_time != t.best_lap_time:
-                [x() for x in self.on_best_lap_time]
-            if self.last.last_lap_time != t.last_lap_time:
-                [x() for x in self.on_last_lap_time]
+        if not self.last:
+            self.last = t
+            return
+        if self.last.current_lap == 0 and t.current_lap == 1:
+            [e() for e in self.on_race_start]
+        if self.last.current_lap != t.current_lap:
+            [e() for e in self.on_lap_change]
+        if self.last.best_lap_time != t.best_lap_time:
+            [x() for x in self.on_best_lap_time]
+        if self.last.last_lap_time != t.last_lap_time:
+            [x() for x in self.on_last_lap_time]
 
-        self.last = t.telemetry
+        self.last = t

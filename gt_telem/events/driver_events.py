@@ -73,6 +73,9 @@ class DriverEvents:
             context: The DriverEvents instance.
         """
         self = context
+        if not self.last:
+            self.last = t
+            return
         if self.last.current_gear != t.current_gear:
             [e() for e in self.on_gear_change]
         if not self.last.high_beams and t.high_beams:
@@ -104,4 +107,4 @@ class DriverEvents:
         elif self.above_max_alert_rpm:
             self.above_max_alert_rpm = False
 
-        self.last = t.telemetry
+        self.last = t
