@@ -58,7 +58,7 @@ class RaceEvents:
             context: The RaceEvents instance.
         """
         self = context
-        if last:
+        if self.last:
             if self.last.current_lap == 0 and t.current_lap == 1:
                 [e() for e in self.on_race_start]
             if self.last.current_lap != t.current_lap:
