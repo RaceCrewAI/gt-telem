@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gt-telem"
-version = "0.2.6"
+version = "0.2.7"
 description = "Library to interface with Gran Turismo's motion rig telemetry service."
 readme = "README.md"
 authors = [{ name = "Jonpro03", email = "jonpro03@gmail.com" }]
@@ -28,7 +28,7 @@ dev = ["black", "bumpver", "isort", "pandas", "pre-commit"]
 Homepage = "https://github.com/RaceCrewAI"
 
 [tool.bumpver]
-current_version = "0.2.6"
+current_version = "0.2.7"
 version_pattern = "MAJOR.MINOR.PATCH"
 commit_message = "bump version {old_version} -> {new_version}"
 tag_message = "{new_version}"
