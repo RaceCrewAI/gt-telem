@@ -121,7 +121,7 @@ class TurismoClient:
         """
         self._telem_update_callbacks.pop(callback)
 
-    def run(self, cancellation_token: asyncio.Event=None) -> None:
+    async def run(self, cancellation_token: asyncio.Event=None) -> None:
         """
         Start the telemetry client and run the event loop.
 
@@ -135,7 +135,7 @@ class TurismoClient:
 
         # Run the tasks in the event loop
         try:
-            loop.run_forever()
+            await asyncio.gather(heartbeat_task, listen_task)
         except KeyboardInterrupt:
             self._cancellation_token.set()
         finally:
