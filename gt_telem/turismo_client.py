@@ -135,13 +135,14 @@ class TurismoClient:
 
         # Run the tasks in the event loop
         try:
-            loop.run_until_complete(asyncio.gather(heartbeat_task, listen_task))
+            loop.run_forever()
         except KeyboardInterrupt:
             self._cancellation_token.set()
         finally:
             # Clean up any resources here if needed
             loop.run_until_complete(loop.shutdown_asyncgens())
             loop.close()
+
 
     async def _send_heartbeat(self) -> None:
         """

@@ -9,6 +9,7 @@ class RaceEvents:
 
     Attributes:
         on_race_start (List[Callable]): List of callbacks to be executed when a race starts.
+        on_race_finish (List[Callable]): List of callbacks to be executed when a driver finishes the last lap.
         on_lap_change (List[Callable]): List of callbacks to be executed when the lap changes.
         on_best_lap_time (List[Callable]): List of callbacks to be executed when the best lap time changes.
         on_last_lap_time (List[Callable]): List of callbacks to be executed when the last lap time changes.
@@ -34,6 +35,7 @@ class RaceEvents:
     """
 
     on_race_start: list[Callable] = []
+    on_race_finish: list[Callable] = []
     on_lap_change: list[Callable] = []
     on_best_lap_time: list[Callable] = []
     on_last_lap_time: list[Callable] = []
@@ -47,6 +49,7 @@ class RaceEvents:
         """
         tc.register_callback(RaceEvents._state_tracker, [self])
         self.last = tc.telemetry
+        self.race_running = False
 
     @staticmethod
     async def _state_tracker(t, context):
@@ -62,9 +65,13 @@ class RaceEvents:
             self.last = t
             return
         if self.last.current_lap == 0 and t.current_lap == 1:
-            [e() for e in self.on_race_start]
+            self.race_running = True
+            [x() for x in self.on_race_start]
+        if self.race_running and t.total_laps + 1 == t.current_lap:
+            self.race_running = False
+            [x() for x in self.on_race_finish]
         if self.last.current_lap != t.current_lap:
-            [e() for e in self.on_lap_change]
+            [x() for x in self.on_lap_change]
         if self.last.best_lap_time != t.best_lap_time:
             [x() for x in self.on_best_lap_time]
         if self.last.last_lap_time != t.last_lap_time:

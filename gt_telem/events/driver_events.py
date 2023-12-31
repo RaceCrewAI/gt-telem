@@ -77,9 +77,9 @@ class DriverEvents:
             self.last = t
             return
         if self.last.current_gear != t.current_gear:
-            [e() for e in self.on_gear_change]
+            [x() for x in self.on_gear_change]
         if not self.last.high_beams and t.high_beams:
-            [e() for e in self.on_flash_lights]
+            [x() for x in self.on_flash_lights]
         if not self.last.hand_brake_active and t.hand_brake_active:
             [x() for x in self.on_handbrake]
         if self.last.suggested_gear != t.suggested_gear:
