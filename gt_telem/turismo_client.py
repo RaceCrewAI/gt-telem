@@ -25,7 +25,6 @@ class TurismoClient:
         Parameters:
             - is_gt7 (bool): Flag indicating whether it's Gran Turismo 7. Default is True.
             - ps_ip (str): PlayStation IP address. If None, it will be discovered.
-            - cancellation_token (asyncio.Event): Set token to shut down threads and return from run()
         """
         self._cancellation_token = None
         ip, ps = get_ps_ip_type()
@@ -44,6 +43,8 @@ class TurismoClient:
         self._crypto: PDEncyption = PDEncyption(is_gt7)
 
         self._telem_lock: threading.Lock = threading.Lock()
+        # Thread for when run w/o wait:
+        self._loop_thread = threading.Thread(target=self._run_forever_threaded)
         self._telem: Telemetry = None
 
         self._telem_update_callbacks = {}
@@ -121,9 +122,48 @@ class TurismoClient:
         """
         self._telem_update_callbacks.pop(callback)
 
-    async def run(self, cancellation_token: asyncio.Event=None) -> None:
+    def start(self):
+        self._loop_thread.start()
+
+    def stop(self):
+        self._cancellation_token.set()
+        self._loop_thread.join()
+
+    def _run_forever_threaded(self, cancellation_token: asyncio.Event=None) -> None:
         """
-        Start the telemetry client and run the event loop.
+        Start the telemetry client and return immediately. Must provide cancellation token.
+
+        Parameters:
+            - cancellation_token (asyncio.Event): Set token to shut down threads and return from run()
+        """
+        asyncio.run(self.run_async(cancellation_token))
+
+    def run(self, cancellation_token: asyncio.Event=None) -> None:
+        """
+        Start the telemetry client and run the event loop. Blocking.
+
+        Parameters:
+            - cancellation_token (asyncio.Event): Set token to shut down threads and return from run()
+        """
+        self._cancellation_token = cancellation_token or asyncio.Event()
+        loop = asyncio.get_event_loop()
+        heartbeat_task = loop.create_task(self._send_heartbeat())
+        listen_task = loop.create_task(self._listen(loop))
+
+        # Run the tasks in the event loop
+        try:
+            loop.run_forever()
+        except KeyboardInterrupt:
+            loop.stop()
+            self._cancellation_token.set()
+        finally:
+            # Clean up any resources here if needed
+            loop.run_until_complete(loop.shutdown_asyncgens())
+            loop.close()
+
+    async def run_async(self, cancellation_token: asyncio.Event=None) -> None:
+        """
+        Asynchronously start the telemetry client and run the event loop.
 
         Parameters:
             - cancellation_token (asyncio.Event): Set token to shut down threads and return from run()
@@ -138,10 +178,10 @@ class TurismoClient:
             await asyncio.gather(heartbeat_task, listen_task)
         except KeyboardInterrupt:
             self._cancellation_token.set()
+            loop.stop()
         finally:
             # Clean up any resources here if needed
-            loop.run_until_complete(loop.shutdown_asyncgens())
-            loop.close()
+            await loop.shutdown_asyncgens()
 
 
     async def _send_heartbeat(self) -> None:

@@ -28,6 +28,7 @@ class GameEvents:
         self.game_state: GameState = GameState.NOT_RUNNING
         self.check_next = 0
         self.tod = tc.telemetry.time_of_day_ms if tc.telemetry else 0
+        self.last = tc.telemetry
         tc.register_callback(GameEvents._state_tracker, [self])
 
     def _change_state(self, state: GameState):
@@ -64,7 +65,6 @@ class GameEvents:
                 return
             self._change_state(GameState.RUNNING)
             logging.debug("Game is running.")
-        last = self.game_state
 
         match self.game_state:
             case GameState.RUNNING:
@@ -72,7 +72,7 @@ class GameEvents:
                     if t.is_paused:
                         logging.debug("Race is paused.")
                         self._change_state(GameState.PAUSED)
-                    if t.current_lap == -1:
+                    if t.time_of_day_ms == 43200000:
                         logging.debug("End of a Race.")
                         self._change_state(GameState.END_RACE)
                     else:
@@ -92,7 +92,7 @@ class GameEvents:
                     self._change_state(GameState.AT_TRACK)
 
             case GameState.AT_TRACK:
-                if t.cars_on_track:
+                if t.cars_on_track and t.current_lap == 0:
                     logging.debug("In a Race.")
                     self._change_state(GameState.IN_RACE)
                 elif t.current_lap == -1:
@@ -131,9 +131,11 @@ class GameEvents:
                                 self._change_state(GameState.END_RACE)
 
             case GameState.END_RACE:
-                if not t.is_loading:
+                if t.total_laps == 0 and self.last.current_lap != t.current_lap:
                     logging.debug("At a track")
                     self._change_state(GameState.AT_TRACK)
 
             case _:
                 logging.debug(f"Unhandled state: {self.game_state}")
+
+        self.last = t

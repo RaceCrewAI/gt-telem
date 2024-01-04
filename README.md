@@ -13,7 +13,34 @@ Install with pip:
 
 ## Usage
 
-Getting telemetry is fairly straightforward. Here's a simple example:
+Getting telemetry is fairly straightforward. Here's a simple example that runs the client on a separate thread:
+```python
+from gt_telem import TurismoClient
+from time import sleep
+
+tc = TurismoClient()
+
+tc.start()
+for i in range(10):
+    sleep(1)
+    print(tc.telemetry.position)
+tc.stop()
+```
+
+If you're working inside of an asynchronous framework, use run_async()
+```python
+from gt_telem import TurismoClient
+
+class MyAsyncClass:
+    def __init__(self, tc: TurismoClient):
+        self.tc = tc
+        self.cancel_tkn: asyncio.Event = None
+
+    async def start_telem(self):
+        await self.tc.run_async(self.cancel_tkn)
+```
+
+Otherwise run like this if you only care for callbacks:
 ```python
 import json
 
@@ -25,10 +52,8 @@ async def print_telem(t: Telemetry):
 
 tc = TurismoClient()
 tc.register_callback(print_telem)
-tc.run()
+tc.run() #blocking call
 ```
-
-`print_telem()` is invoked with each frame rendered (60hz). This tends to produces a lot of noise, especially when in menus, or even if the race is paused.
 
 The full list of telemetry is available [here](https://github.com/RaceCrewAI/gt-telem/blob/main/gt_telem/models/telemetry.py).
 
@@ -93,17 +118,18 @@ if __name__ == "__main__":
     except PlayStatonOnStandbyError as e:
         print("Turn the playstation on")
         print(e)
-    except PlayStationNotFoundError:
+        exit()
+    except PlayStationNotFoundError as e:
         print("Maybe I'm on the wrong network")
         print(e)
-    else:
-        ge = GameEvents(tc)
-        mstr = MySimpleTelemetryRecorder(tc)
-        ge.on_in_race.append(mstr.start)
-        ge.on_race_end.append(mstr.stop)
-        ge.on_paused.append(mstr.stop)
-        print("Listening for telemetry. CTRL+C to stop")
-        tc.run()
+        exit()
+    ge = GameEvents(tc)
+    mstr = MySimpleTelemetryRecorder(tc)
+    ge.on_in_race.append(mstr.start)
+    ge.on_race_end.append(mstr.stop)
+    ge.on_paused.append(mstr.stop)
+    print("Listening for telemetry. CTRL+C to stop")
+    tc.run()
 ```
 
 `TurismoClient.run()` is a blocking call, but does shut down gracefully when a keyboard interrupt is issued. It also accepts a cancellation token.

@@ -117,9 +117,10 @@ class Telemetry(TelemetryPacket):
     - low_beams: Check if the low beams are active.
     - asm_active: Check if the ASM (Active Stability Management) is active.
     - tcs_active: Check if the TCS (Traction Control System) is active.
-    - unknown_bool_1: Usually true. Purpose unknown.
-    - clutch_out: Check if the clutch is out.
-    - unknown_bool_3: Usually true. Purpose unknown.
+    - unknown_bool_1: Purpose unknown.
+    - unknown_bool_2: Purpose unknown.
+    - unknown_bool_3: Purpose unknown.
+    - unknown_bool_4: Purpose unknown.
     - best_lap_time: Get the formatted best lap time.
     - last_lap_time: Get the formatted last lap time.
     - time_of_day: Get the formatted time of day.
@@ -241,105 +242,112 @@ class Telemetry(TelemetryPacket):
         """
         Check if there are cars on the track.
         """
-        return bool(1 & self.flags)
+        return bool(1<<0 & self.flags)
 
     @property
     def is_paused(self) -> bool:
         """
         Check if the simulation is paused.
         """
-        return bool(2 & self.flags)
+        return bool(1<<1 & self.flags)
 
     @property
     def is_loading(self) -> bool:
         """
         Check if the simulation is loading.
         """
-        return bool(3 & self.flags)
+        return bool(1<<2 & self.flags)
 
     @property
     def in_gear(self) -> bool:
         """
         Check if the vehicle is in gear.
         """
-        return bool(4 & self.flags)
+        return bool(1<<3 & self.flags)
 
     @property
     def has_turbo(self) -> bool:
         """
         Check if the vehicle has a turbo.
         """
-        return bool(5 & self.flags)
+        return bool(1<<4 & self.flags)
 
     @property
     def rev_limit(self) -> bool:
         """
         Check if the vehicle is at the rev limit.
         """
-        return bool(6 & self.flags)
+        return bool(1<<5 & self.flags)
 
     @property
     def hand_brake_active(self) -> bool:
         """
         Check if the hand brake is active.
         """
-        return bool(7 & self.flags)
+        return bool(1<<6 & self.flags)
 
     @property
     def lights_active(self) -> bool:
         """
         Check if the lights are active.
         """
-        return bool(8 & self.flags)
+        return bool(1<<7 & self.flags)
 
     @property
     def high_beams(self) -> bool:
         """
         Check if the high beams are active.
         """
-        return bool(9 & self.flags)
+        return bool(1<<8 & self.flags)
 
     @property
     def low_beams(self) -> bool:
         """
         Check if the low beams are active.
         """
-        return bool(10 & self.flags)
+        return bool(1<<9 & self.flags)
 
     @property
     def asm_active(self) -> bool:
         """
         Check if the ASM (Active Stability Management) is active.
         """
-        return bool(11 & self.flags)
+        return bool(1<<10 & self.flags)
 
     @property
     def tcs_active(self) -> bool:
         """
         Check if the TCS (Traction Control System) is active.
         """
-        return bool(12 & self.flags)
+        return bool(1<<11 & self.flags)
 
     @property
     def unknown_bool_1(self) -> bool:
         """
         Get the value of an unknown boolean flag.
         """
-        return bool(13 & self.flags)
+        return bool(1<<12 & self.flags)
 
     @property
-    def clutch_out(self) -> bool:
+    def unknown_bool_2(self) -> bool:
         """
-        Check if the clutch is out.
+        Not sure
         """
-        return bool(14 & self.flags)
+        return bool(1<<13 & self.flags)
 
     @property
     def unknown_bool_3(self) -> bool:
         """
         Get the value of another unknown boolean flag.
         """
-        return bool(15 & self.flags)
+        return bool(1<<14 & self.flags)
+
+    @property
+    def unknown_bool_4(self) -> bool:
+        """
+        Get the value of another unknown boolean flag.
+        """
+        return bool(1<<15 & self.flags)
 
     @property
     def best_lap_time(self) -> str:
@@ -421,8 +429,9 @@ class Telemetry(TelemetryPacket):
             "asm_active": self.asm_active,
             "tcs_active": self.tcs_active,
             "unknown_bool_1": self.unknown_bool_1,
-            "clutch_out": self.clutch_out,
+            "unknown_bool_2": self.unknown_bool_2,
             "unknown_bool_3": self.unknown_bool_3,
+            "unknown_bool_4": self.unknown_bool_4,
             "best_lap_time": self.best_lap_time,
             "last_lap_time": self.last_lap_time,
             "time_of_day": self.time_of_day,
@@ -433,3 +442,70 @@ class Telemetry(TelemetryPacket):
             result.pop(remove_key, None)
 
         return result
+
+    @staticmethod
+    def from_dict(d):
+        """
+        Get telemetry instance from the as_dict property
+        Useful for replays
+        """
+
+        # pop the vector3s
+        for vec3 in ["position", "velocity", "rotation", "angular_velocity", "road_plane"]:
+            prop = d.pop(vec3)
+            if vec3 == "angular_velocity":
+                vec3 = "ang_vel"
+            d[f"{vec3}_x"] = prop[0]
+            d[f"{vec3}_y"] = prop[1]
+            d[f"{vec3}_z"] = prop[2]
+        # pop the corners
+        for whmet, attr in {
+            "tire_temp": "tire_{0}_temp",
+            "wheel_rps": "wheel_{0}_rps",
+            "tire_radius": "tire_{0}_radius",
+            "suspension_height": "tire_{0}_sus_height"
+        }.items():
+            prop = d.pop(whmet)
+            for i, k in {
+                0: "fl",
+                1: "fr",
+                2: "rl",
+                3: "rr"
+            }.items():
+                d[attr.format(k)] = prop[i]
+        # rebuild the bits attr
+        sg = d.pop("suggested_gear") & 0xF
+        cg = d.pop("current_gear") & 0xF
+        d["bits"] = (sg << 4) | cg
+
+        # just remove these:
+        for prop in ["speed_kph", "speed_mph", "best_lap_time", "last_lap_time", "time_of_day"]:
+            d.pop(prop)
+
+        # Add back ones removed:
+        d["empty"] = 0
+        for i in range(8):
+            d[f"unused{i+1}"] = 0
+
+        # rebuild flags
+        d["flags"] = (
+            (1<<0 if d.pop("cars_on_track") else 0) |
+            (1<<1 if d.pop("is_paused") else 0) |
+            (1<<2 if d.pop("is_loading") else 0) |
+            (1<<3 if d.pop("in_gear") else 0) |
+            (1<<4 if d.pop("has_turbo") else 0) |
+            (1<<5 if d.pop("rev_limit") else 0) |
+            (1<<6 if d.pop("hand_brake_active") else 0) |
+            (1<<7 if d.pop("lights_active") else 0) |
+            (1<<8 if d.pop("high_beams") else 0) |
+            (1<<9 if d.pop("low_beams") else 0) |
+            (1<<10 if d.pop("asm_active") else 0) |
+            (1<<11 if d.pop("tcs_active") else 0) |
+            (1<<12 if d.pop("unknown_bool_1", False) else 0) |
+            (1<<13 if d.pop("clutch_out", False) else 0) |
+            (1<<13 if d.pop("unknown_bool_2", False) else 0) |
+            (1<<14 if d.pop("unknown_bool_3", False) else 0) |
+            (1<<15 if d.pop("unknown_bool_4", False) else 0)
+        )
+
+        return Telemetry(**d)
