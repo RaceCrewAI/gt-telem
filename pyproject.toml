@@ -17,7 +17,8 @@ classifiers = [
 ]
 keywords = ["gran", "turismo"]
 dependencies = [
-    "salsa20 >= 0.3.0"
+    "salsa20 >= 0.3.0",
+    "transforms3d >= 0.4.1"
 ]
 requires-python = ">=3.10"
 

@@ -9,10 +9,10 @@ class TelemetryPacket:
     velocity_x: float
     velocity_y: float
     velocity_z: float
-    rotation_x: float
-    rotation_y: float
-    rotation_z: float
-    orientation: float
+    rotation_i: float
+    rotation_j: float
+    rotation_k: float
+    rotation_w: float
     ang_vel_x: float
     ang_vel_y: float
     ang_vel_z: float
@@ -46,10 +46,10 @@ class TelemetryPacket:
     throttle: int
     brake: int
     empty: int
-    road_plane_x: float
-    road_plane_y: float
-    road_plane_z: float
-    road_plane_dist: float
+    road_plane_i: float
+    road_plane_j: float
+    road_plane_k: float
+    road_plane_w: float
     wheel_fl_rps: float
     wheel_fr_rps: float
     wheel_rl_rps: float

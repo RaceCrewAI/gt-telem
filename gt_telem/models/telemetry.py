@@ -1,6 +1,8 @@
+import math
 from datetime import datetime
 
-from gt_telem.models.helpers import format_time, format_time_of_day
+from gt_telem.models.helpers import (format_time, format_time_of_day,
+                                     loop_angle, quaternion_to_euler)
 from gt_telem.models.models import Vector3D, WheelMetric
 from gt_telem.models.telemetry_packet import TelemetryPacket
 
@@ -10,127 +12,136 @@ class Telemetry(TelemetryPacket):
     Telemetry data from Gran Turismo
 
     Attributes:
-    - position_x: float - X-coordinate of the position.
-    - position_y: float - Y-coordinate of the position.
-    - position_z: float - Z-coordinate of the position.
-    - velocity_x: float - X-component of velocity.
-    - velocity_y: float - Y-component of velocity.
-    - velocity_z: float - Z-component of velocity.
-    - rotation_x: float - X-component of rotation.
-    - rotation_y: float - Y-component of rotation.
-    - rotation_z: float - Z-component of rotation.
-    - orientation: float - Orientation.
-    - ang_vel_x: float - X-component of angular velocity.
-    - ang_vel_y: float - Y-component of angular velocity.
-    - ang_vel_z: float - Z-component of angular velocity.
-    - body_height: float - Height of the body.
-    - engine_rpm: float - Engine RPM.
-    - iv: float - IV, used for encryption.
-    - fuel_level: float - Fuel level.
-    - fuel_capacity: float - Fuel capacity.
-    - speed_mps: float - Speed in meters per second.
-    - boost_pressure: float - Boost pressure.
-    - oil_pressure: float - Oil pressure.
-    - water_temp: float - Water temperature.
-    - oil_temp: float - Oil temperature.
-    - tire_fl_temp: float - Front-left tire temperature.
-    - tire_fr_temp: float - Front-right tire temperature.
-    - tire_rl_temp: float - Rear-left tire temperature.
-    - tire_rr_temp: float - Rear-right tire temperature.
-    - packet_id: int - Packet ID.
-    - current_lap: int - Current lap.
-    - total_laps: int - Total laps.
-    - best_lap_time_ms: int - Best lap time in milliseconds.
-    - last_lap_time_ms: int - Last lap time in milliseconds.
-    - time_of_day_ms: int - Time of day in milliseconds.
-    - race_start_pos: int - Race start position.
-    - total_cars: int - Total number of cars.
-    - min_alert_rpm: int - Minimum alert RPM.
-    - max_alert_rpm: int - Maximum alert RPM.
-    - calc_max_speed: int - Calculated maximum speed.
-    - flags: int - byte that contains current/suggested gear.
-    - bits: int - Collection of booleans - see properties.
-    - throttle: int - Throttle.
-    - brake: int - Brake.
-    - empty: int - Unused.
-    - road_plane_x: float - X-coordinate of the road plane.
-    - road_plane_y: float - Y-coordinate of the road plane.
-    - road_plane_z: float - Z-coordinate of the road plane.
-    - road_plane_dist: float - Distance of the road plane. Not sure what this is.
-    - wheel_fl_rps: float - Front-left wheel revolutions per second.
-    - wheel_fr_rps: float - Front-right wheel revolutions per second.
-    - wheel_rl_rps: float - Rear-left wheel revolutions per second.
-    - wheel_rr_rps: float - Rear-right wheel revolutions per second.
-    - tire_fl_radius: float - Front-left tire radius.
-    - tire_fr_radius: float - Front-right tire radius.
-    - tire_rl_radius: float - Rear-left tire radius.
-    - tire_rr_radius: float - Rear-right tire radius.
-    - tire_fl_sus_height: float - Front-left tire suspension height.
-    - tire_fr_sus_height: float - Front-right tire suspension height.
-    - tire_rl_sus_height: float - Rear-left tire suspension height.
-    - tire_rr_sus_height: float - Rear-right tire suspension height.
-    - unused1: int - Unused variable 1.
-    - unused2: int - Unused variable 2.
-    - unused3: int - Unused variable 3.
-    - unused4: int - Unused variable 4.
-    - unused5: int - Unused variable 5.
-    - unused6: int - Unused variable 6.
-    - unused7: int - Unused variable 7.
-    - unused8: int - Unused variable 8.
-    - clutch_pedal: float - Clutch pedal position.
-    - clutch_engagement: float - Clutch engagement.
-    - trans_rpm: float - Transmission RPM.
-    - trans_top_speed: float - Transmission top speed.
-    - gear1: float - Gear 1.
-    - gear2: float - Gear 2.
-    - gear3: float - Gear 3.
-    - gear4: float - Gear 4.
-    - gear5: float - Gear 5.
-    - gear6: float - Gear 6.
-    - gear7: float - Gear 7.
-    - gear8: float - Gear 8.
-    - car_code: int - Car code - on vehicles with more than 8 gears, this is corrupted.
+    - position_x (float): X-coordinate of the position.
+    - position_y (float): Y-coordinate of the position.
+    - position_z (float): Z-coordinate of the position.
+    - velocity_x (float): X-component of velocity.
+    - velocity_y (float): Y-component of velocity.
+    - velocity_z (float): Z-component of velocity.
+    - rotation_i (float): I-component of rotation quaternion.
+    - rotation_j (float): J-component of rotation quaternion.
+    - rotation_k (float): K-component of rotation quaternion.
+    - rotation_w (float): W-component of rotation quaternion.
+    - ang_vel_x (float): X-component of angular velocity.
+    - ang_vel_y (float): Y-component of angular velocity.
+    - ang_vel_z (float): Z-component of angular velocity.
+    - body_height (float): Height of the body.
+    - engine_rpm (float): Engine RPM.
+    - iv (float): IV, used for encryption.
+    - fuel_level (float): Fuel level.
+    - fuel_capacity (float): Fuel capacity.
+    - speed_mps (float): Speed in meters per second.
+    - boost_pressure (float): Boost pressure.
+    - oil_pressure (float): Oil pressure.
+    - water_temp (float): Water temperature.
+    - oil_temp (float): Oil temperature.
+    - tire_fl_temp (float): Front-left tire temperature.
+    - tire_fr_temp (float): Front-right tire temperature.
+    - tire_rl_temp (float): Rear-left tire temperature.
+    - tire_rr_temp (float): Rear-right tire temperature.
+    - packet_id (int): Packet ID.
+    - current_lap (int): Current lap.
+    - total_laps (int): Total laps.
+    - best_lap_time_ms (int): Best lap time in milliseconds.
+    - last_lap_time_ms (int): Last lap time in milliseconds.
+    - time_of_day_ms (int): Time of day in milliseconds.
+    - race_start_pos (int): Race start position.
+    - total_cars (int): Total number of cars.
+    - min_alert_rpm (int): Minimum alert RPM.
+    - max_alert_rpm (int): Maximum alert RPM.
+    - calc_max_speed (int): Calculated maximum speed.
+    - flags (int): Byte that contains current/suggested gear.
+    - bits (int): Collection of booleans - see properties.
+    - throttle (int): Throttle.
+    - brake (int): Brake.
+    - empty (int): Unused.
+    - road_plane_i (float): I-coordinate of the road plane quaternion.
+    - road_plane_j (float): J-coordinate of the road plane quaternion.
+    - road_plane_k (float): K-coordinate of the road plane quaternion.
+    - road_plane_w (float): W-coordinate of the road plane quaternion.
+    - wheel_fl_rps (float): Front-left wheel revolutions per second.
+    - wheel_fr_rps (float): Front-right wheel revolutions per second.
+    - wheel_rl_rps (float): Rear-left wheel revolutions per second.
+    - wheel_rr_rps (float): Rear-right wheel revolutions per second.
+    - tire_fl_radius (float): Front-left tire radius.
+    - tire_fr_radius (float): Front-right tire radius.
+    - tire_rl_radius (float): Rear-left tire radius.
+    - tire_rr_radius (float): Rear-right tire radius.
+    - tire_fl_sus_height (float): Front-left tire suspension height.
+    - tire_fr_sus_height (float): Front-right tire suspension height.
+    - tire_rl_sus_height (float): Rear-left tire suspension height.
+    - tire_rr_sus_height (float): Rear-right tire suspension height.
+    - unused1 (int): Unused variable 1.
+    - unused2 (int): Unused variable 2.
+    - unused3 (int): Unused variable 3.
+    - unused4 (int): Unused variable 4.
+    - unused5 (int): Unused variable 5.
+    - unused6 (int): Unused variable 6.
+    - unused7 (int): Unused variable 7.
+    - unused8 (int): Unused variable 8.
+    - clutch_pedal (float): Clutch pedal position.
+    - clutch_engagement (float): Clutch engagement.
+    - trans_rpm (float): Transmission RPM.
+    - trans_top_speed (float): Transmission top speed.
+    - gear1 (float): Gear 1.
+    - gear2 (float): Gear 2.
+    - gear3 (float): Gear 3.
+    - gear4 (float): Gear 4.
+    - gear5 (float): Gear 5.
+    - gear6 (float): Gear 6.
+    - gear7 (float): Gear 7.
+    - gear8 (float): Gear 8.
+    - car_code (int): Car code - on vehicles with more than 8 gears, this is corrupted.
 
     Properties:
-    - position: Get the position as a Vector3D.
-    - velocity: Get the velocity as a Vector3D.
-    - rotation: Get the rotation as a Vector3D.
-    - angular_velocity: Get the angular velocity as a Vector3D.
-    - road_plane: Get the road plane coordinates as a Vector3D.
-    - tire_temp: Get tire temperatures as a WheelMetric.
-    - wheel_rps: Get wheel revolutions per second as a WheelMetric.
-    - tire_radius: Get tire radii as a WheelMetric.
-    - suspension_height: Get suspension heights as a WheelMetric.
-    - current_gear: Get the current gear.
-    - suggested_gear: Get the suggested gear.
-    - speed_kph: Get the speed in kilometers per hour.
-    - speed_mph: Get the speed in miles per hour.
-    - cars_on_track: Check if there are cars on the track.
-    - is_paused: Check if the simulation is paused.
-    - is_loading: Check if the simulation is loading.
-    - in_gear: Check if the vehicle is in gear.
-    - has_turbo: Check if the vehicle has a turbo.
-    - rev_limit: Check if the vehicle is at the rev limit.
-    - hand_brake_active: Check if the hand brake is active.
-    - lights_active: Check if the lights are active.
-    - high_beams: Check if the high beams are active.
-    - low_beams: Check if the low beams are active.
-    - asm_active: Check if the ASM (Active Stability Management) is active.
-    - tcs_active: Check if the TCS (Traction Control System) is active.
-    - unknown_bool_1: Purpose unknown.
-    - unknown_bool_2: Purpose unknown.
-    - unknown_bool_3: Purpose unknown.
-    - unknown_bool_4: Purpose unknown.
-    - best_lap_time: Get the formatted best lap time.
-    - last_lap_time: Get the formatted last lap time.
-    - time_of_day: Get the formatted time of day.
+    - position (Vector3D): Get the position as a Vector3D.
+    - velocity (Vector3D): Get the velocity as a Vector3D.
+    - angular_velocity (Vector3D): Get the angular velocity as a Vector3D.
+    - tire_temp (WheelMetric): Get tire temperatures as a WheelMetric.
+    - wheel_rps (WheelMetric): Get wheel revolutions per second as a WheelMetric.
+    - tire_radius (WheelMetric): Get tire radii as a WheelMetric.
+    - suspension_height (WheelMetric): Get suspension heights as a WheelMetric.
+    - current_gear (int): Get the current gear.
+    - suggested_gear (int): Get the suggested gear.
+    - speed_kph (float): Get the speed in kilometers per hour.
+    - speed_mph (float): Get the speed in miles per hour.
+    - cars_on_track (bool): Check if there are cars on the track.
+    - is_paused (bool): Check if the simulation is paused.
+    - is_loading (bool): Check if the simulation is loading.
+    - in_gear (bool): Check if the vehicle is in gear.
+    - has_turbo (bool): Check if the vehicle has a turbo.
+    - rev_limit (bool): Check if the vehicle is at the rev limit.
+    - hand_brake_active (bool): Check if the hand brake is active.
+    - lights_active (bool): Check if the lights are active.
+    - high_beams (bool): Check if the high beams are active.
+    - low_beams (bool): Check if the low beams are active.
+    - asm_active (bool): Check if the ASM (Active Stability Management) is active.
+    - tcs_active (bool): Check if the TCS (Traction Control System) is active.
+    - unknown_bool_1 (bool): Purpose unknown.
+    - unknown_bool_2 (bool): Purpose unknown.
+    - unknown_bool_3 (bool): Purpose unknown.
+    - unknown_bool_4 (bool): Purpose unknown.
+    - best_lap_time (str): Get the formatted best lap time.
+    - last_lap_time (str): Get the formatted last lap time.
+    - time_of_day (str): Get the formatted time of day.
+    - vehicle_roll (float): Roll in degrees.
+    - vehicle_pitch (float): Pitch in degrees.
+    - vehicle_yaw (float): Yaw in degrees.
+    - vehicle_surge (float): Surge for simfeedback.
+    - vehicle_heave (float): Heave for simfeedback.
+    - plane_roll (float): Roll in degrees.
+    - plane_pitch (float): Pitch in degrees.
+    - plane_yaw (float): Yaw in degrees.
 
-    Methods
-    - as_dict: Get the state of the object in a dictionary format.
+    Methods:
+    - as_dict(): Get the state of the object in a dictionary format.
+    - from_dict(): Get telemetry instance from the as_dict property.
     """
 
     def __post_init__(self):
         self.time = datetime.now()
+        self.rotation_euler = None
+        self.plane_euler = None
 
     @property
     def position(self) -> Vector3D:
@@ -147,25 +158,11 @@ class Telemetry(TelemetryPacket):
         return Vector3D(self.velocity_x, self.velocity_y, self.velocity_z)
 
     @property
-    def rotation(self) -> Vector3D:
-        """
-        Get the rotation as a Vector3D.
-        """
-        return Vector3D(self.rotation_x, self.rotation_y, self.rotation_z)
-
-    @property
     def angular_velocity(self) -> Vector3D:
         """
         Get the angular velocity as a Vector3D.
         """
         return Vector3D(self.ang_vel_x, self.ang_vel_y, self.ang_vel_z)
-
-    @property
-    def road_plane(self) -> Vector3D:
-        """
-        Get the road plane coordinates as a Vector3D.
-        """
-        return Vector3D(self.road_plane_x, self.road_plane_y, self.road_plane_z)
 
     @property
     def tire_temp(self) -> WheelMetric:
@@ -376,6 +373,99 @@ class Telemetry(TelemetryPacket):
             return None
         return format_time_of_day(self.time_of_day_ms)
 
+    # for simfeedback
+    @property
+    def vehicle_roll(self) -> float:
+        """
+        Get the roll Euler angle in degrees.
+
+        Returns:
+            float: The roll Euler angle in degrees.
+        """
+        if not self.rotation_euler:
+            self.rotation_euler = quaternion_to_euler(self.rotation_w, self.rotation_i, self.rotation_j, self.rotation_k)
+        return loop_angle(math.degrees(self.rotation_euler[0]), 180)
+
+    @property
+    def vehicle_pitch(self) -> float:
+        """
+        Get the pitch Euler angle in degrees.
+
+        Returns:
+            float: The pitch Euler angle in degrees.
+        """
+        if not self.rotation_euler:
+            self.rotation_euler = quaternion_to_euler(self.rotation_w, self.rotation_i, self.rotation_j, self.rotation_k)
+        return math.degrees(self.rotation_euler[1])
+
+    @property
+    def vehicle_yaw(self) -> float:
+        """
+        Get the yaw Euler angle in degrees.
+
+        Returns:
+            float: The yaw Euler angle in degrees.
+        """
+        if not self.rotation_euler:
+            self.rotation_euler = quaternion_to_euler(self.rotation_w, self.rotation_i, self.rotation_j, self.rotation_k)
+        return math.degrees(self.rotation_euler[2])
+
+    @property
+    def vehicle_surge(self) -> float:
+        """
+        Get the surge velocity.
+
+        Returns:
+            float: The surge velocity.
+        """
+        return velocity_x * 0.10197162129779
+
+    @property
+    def vehicle_heave(self) -> float:
+        """
+        Get the heave velocity.
+
+        Returns:
+            float: The heave velocity.
+        """
+        return velocity_y * 0.10197162129779
+
+    @property
+    def plane_roll(self) -> float:
+        """
+        Get the roll Euler angle in degrees.
+
+        Returns:
+            float: The roll Euler angle in degrees.
+        """
+        if not self.plane_euler:
+            self.plane_euler = quaternion_to_euler(self.road_plane_w, self.road_plane_i, self.road_plane_j, self.road_plane_k)
+        return loop_angle(math.degrees(self.plane_euler[0]), 180)
+
+    @property
+    def plane_pitch(self) -> float:
+        """
+        Get the pitch Euler angle in degrees.
+
+        Returns:
+            float: The pitch Euler angle in degrees.
+        """
+        if not self.plane_euler:
+            self.plane_euler = quaternion_to_euler(self.road_plane_w, self.road_plane_i, self.road_plane_j, self.road_plane_k )
+        return math.degrees(self.plane_euler[1])
+
+    @property
+    def plane_yaw(self) -> float:
+        """
+        Get the yaw Euler angle in degrees.
+
+        Returns:
+            float: The yaw Euler angle in degrees.
+        """
+        if not self.plane_euler:
+            self.plane_euler = quaternion_to_euler(self.road_plane_w, self.road_plane_i, self.road_plane_j, self.road_plane_k)
+        return math.degrees(self.plane_euler[2])
+
     @property
     def as_dict(self):
         """
@@ -405,9 +495,7 @@ class Telemetry(TelemetryPacket):
         added = {
             "position": self.position,
             "velocity": self.velocity,
-            "rotation": self.rotation,
             "angular_velocity": self.angular_velocity,
-            "road_plane": self.road_plane,
             "tire_temp": self.tire_temp,
             "wheel_rps": self.wheel_rps,
             "tire_radius": self.tire_radius,
