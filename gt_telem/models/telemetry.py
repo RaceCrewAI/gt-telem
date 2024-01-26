@@ -138,11 +138,6 @@ class Telemetry(TelemetryPacket):
     - from_dict(): Get telemetry instance from the as_dict property.
     """
 
-    def __post_init__(self):
-        self.time = datetime.now()
-        self.rotation_euler = None
-        self.plane_euler = None
-
     @property
     def position(self) -> Vector3D:
         """
@@ -384,7 +379,8 @@ class Telemetry(TelemetryPacket):
         """
         if not self.rotation_euler:
             self.rotation_euler = quaternion_to_euler(self.rotation_w, self.rotation_i, self.rotation_j, self.rotation_k)
-        return loop_angle(math.degrees(self.rotation_euler[0]), 180)
+        #return loop_angle(math.degrees(self.rotation_euler[0]), 180)
+        return math.degrees(self.rotation_euler[0])
 
     @property
     def vehicle_pitch(self) -> float:

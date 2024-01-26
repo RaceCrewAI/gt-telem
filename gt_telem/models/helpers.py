@@ -54,11 +54,8 @@ def loop_angle(angle, range_size):
 
 
 def quaternion_to_euler(w, i, j, k) -> tuple[float, float, float]:
-    # Normalize the quaternion
-    quat = quaternions.qnorm([w, i, j, k])
-
     # Convert quaternion to Euler angles (roll, pitch, yaw)
-    euler_angles = euler.quat2euler(quat, axes='sxyz')
+    euler_angles = euler.quat2euler([w, i, j, k], axes='sxyz')
     roll, pitch, yaw = euler_angles
     return roll, pitch, yaw
 

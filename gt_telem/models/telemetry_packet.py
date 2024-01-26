@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 
 
 @dataclass
@@ -9,10 +10,10 @@ class TelemetryPacket:
     velocity_x: float
     velocity_y: float
     velocity_z: float
+    rotation_w: float
     rotation_i: float
     rotation_j: float
     rotation_k: float
-    rotation_w: float
     ang_vel_x: float
     ang_vel_y: float
     ang_vel_z: float
@@ -46,10 +47,10 @@ class TelemetryPacket:
     throttle: int
     brake: int
     empty: int
+    road_plane_w: float
     road_plane_i: float
     road_plane_j: float
     road_plane_k: float
-    road_plane_w: float
     wheel_fl_rps: float
     wheel_fr_rps: float
     wheel_rl_rps: float
@@ -83,3 +84,8 @@ class TelemetryPacket:
     gear7: float
     gear8: float
     car_code: int
+
+    def __post_init__(self):
+        self.time = datetime.now()
+        self.rotation_euler = None
+        self.plane_euler = None
