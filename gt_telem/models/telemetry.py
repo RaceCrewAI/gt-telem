@@ -91,6 +91,21 @@ class Telemetry(TelemetryPacket):
     - gear8: float - Gear 8.
     - car_code: int - Car code - on vehicles with more than 8 gears, this is corrupted.
 
+    Additional fields for heartbeat type "B" (motion data):
+    - wheel_rotation_radians: float - Wheel rotation in radians (optional).
+    - filler_float_fb: float - Possibly lateral slip angle or motion-related data (optional).
+    - sway: float - Vehicle sway motion (optional).
+    - heave: float - Vehicle heave motion (optional).
+    - surge: float - Vehicle surge motion (optional).
+
+    Additional fields for heartbeat type "~" (extended data):
+    - throttle_filtered: int - Filtered throttle value (optional).
+    - brake_filtered: int - Filtered brake value (optional).
+    - unk_tilde_1: int - Unknown field 1 for tilde format (optional).
+    - unk_tilde_2: int - Unknown field 2 for tilde format (optional).
+    - energy_recovery: float - Energy recovery value (optional).
+    - unk_tilde_3: float - Unknown field 3 for tilde format (optional).
+
     Properties:
     - position: Get the position as a Vector3D.
     - velocity: Get the velocity as a Vector3D.
@@ -509,3 +524,41 @@ class Telemetry(TelemetryPacket):
         )
 
         return Telemetry(**d)
+
+    @property
+    def motion_data(self) -> dict:
+        """
+        Get motion data available in heartbeat type "B" as a dictionary.
+        Returns None if motion data is not available.
+        """
+        if (self.wheel_rotation_radians is not None and 
+            self.sway is not None and 
+            self.heave is not None and 
+            self.surge is not None):
+            return {
+                'wheel_rotation_radians': self.wheel_rotation_radians,
+                'filler_float_fb': self.filler_float_fb,
+                'sway': self.sway,
+                'heave': self.heave,
+                'surge': self.surge,
+            }
+        return None
+
+    @property
+    def extended_data(self) -> dict:
+        """
+        Get extended data available in heartbeat type "~" as a dictionary.
+        Returns None if extended data is not available.
+        """
+        if (self.throttle_filtered is not None and 
+            self.brake_filtered is not None and 
+            self.energy_recovery is not None):
+            return {
+                'throttle_filtered': self.throttle_filtered,
+                'brake_filtered': self.brake_filtered,
+                'unk_tilde_1': self.unk_tilde_1,
+                'unk_tilde_2': self.unk_tilde_2,
+                'energy_recovery': self.energy_recovery,
+                'unk_tilde_3': self.unk_tilde_3,
+            }
+        return None
