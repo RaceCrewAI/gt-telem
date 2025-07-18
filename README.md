@@ -6,68 +6,12 @@ Python library for interfacing with Polyphony Digital's telemetry service for mo
 * Asynchronous callbacks
 * Game event observer
 * Telemetry as an object or a dictionary
-* **NEW: Real-time GUI Dashboard** - Visual gauges for steering, throttle, brake, RPM, and gear
 
 ## Installation
 Install with pip:
 `pip install gt-telem`
 
-## GUI Dashboard
-
-A real-time telemetry dashboard is now included! The GUI displays:
-- **RPM Gauge**: Circular gauge showing engine RPM (0-8000)
-- **Steering Gauge**: Shows steering wheel rotation in radians (requires heartbeat type "B")
-- **Throttle Bar**: Horizontal bar showing throttle percentage (green)
-- **Brake Bar**: Horizontal bar showing brake percentage (red)
-- **Gear Display**: Digital gear indicator (N, R, 1-8)
-- **Additional Info**: Speed, lap times, fuel level, race position, motion data
-
 **Note**: The GUI uses heartbeat type "B" to access motion data including steering wheel rotation.
-
-### Running the GUI
-
-#### Main GUI (Requires PlayStation/GT7):
-**Windows:**
-```bash
-# Run the main GUI
-run_gui.bat
-```
-
-**Linux/macOS:**
-```bash
-# Make executable and run
-chmod +x run_gui.sh
-./run_gui.sh
-```
-
-#### Test GUI (No PlayStation Required):
-For testing the GUI components with simulated data:
-
-**Windows:**
-```bash
-# Run the test GUI
-test_gui.bat
-```
-
-**Linux/macOS:**
-```bash
-# Make executable and run
-chmod +x test_gui.sh
-./test_gui.sh
-```
-
-#### Manual Method:
-```bash
-# Activate virtual environment first
-# Windows:
-.venv\Scripts\activate.bat
-# Linux/macOS:
-source .venv/bin/activate
-
-# Then run either GUI
-python gt_telemetry_gui.py     # Main GUI
-python test_gui.py             # Test GUI
-```
 
 **Requirements:**
 - Gran Turismo 7 running on PlayStation
@@ -261,8 +205,3 @@ if telemetry and telemetry.extended_data:
     print(f"Energy Recovery: {extended['energy_recovery']:.3f}")
     print(f"Filtered Throttle: {extended['throttle_filtered']}")
 ```
-
-### Important Notes
-- **Only one heartbeat type can be active per session.** The first heartbeat sent to the game "wins" and cannot be changed until the game stops sending telemetry.
-- Different heartbeat types use different encryption keys (IV masks: A=`0xDEADBEAF`, B=`0xDEADBEEF`, ~=`0x55FABB4F`), which can cause compatibility issues between applications using different formats.
-- Not all applications support the extended heartbeat formats. Use type "A" for maximum compatibility.
