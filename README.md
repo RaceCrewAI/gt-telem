@@ -3,9 +3,10 @@ Python library for interfacing with Polyphony Digital's telemetry service for mo
 
 ## Features
 * Playstation IP Address discovery
-* Asynchronous callbacks
+* Synchronous and asynchronous callbacks with thread pool execution
 * Game event observer
 * Telemetry as an object or a dictionary
+* Configurable callback worker threads for optimal performance
 
 ## Installation
 Install with pip:
@@ -19,12 +20,6 @@ Install with pip:
 - PlayStation and PC on the same network
 - Python 3.7+ with tkinter (included with most Python installations)
 
-### GUI Features:
-- **Real-time Updates**: 60 FPS refresh rate for smooth gauge movement
-- **Connection Management**: Easy connect/disconnect with status indicators
-- **Error Handling**: Clear error messages for connection issues
-- **Modern Interface**: Dark theme with colorful gauges
-- **Responsive Design**: Scales well on different screen sizes
 
 ## Usage
 
@@ -62,12 +57,17 @@ import json
 from gt_telem import TurismoClient
 from gt_telem.models import Telemetry
 
-async def print_telem(t: Telemetry):
+# Both sync and async callbacks are supported
+async def print_telem_async(t: Telemetry):
     print(json.dumps(t.as_dict, indent=4))
 
+def print_telem_sync(t: Telemetry):
+    print(f"Speed: {t.speed_mps:.2f} m/s")
+
 tc = TurismoClient()
-tc.register_callback(print_telem)
-tc.run() #blocking call
+tc.register_callback(print_telem_async)  # Async callback
+tc.register_callback(print_telem_sync)   # Sync callback
+tc.run()  # Blocking call
 ```
 
 The full list of telemetry is available [here](https://github.com/RaceCrewAI/gt-telem/blob/main/gt_telem/models/telemetry.py).
@@ -129,7 +129,8 @@ class MySimpleTelemetryRecorder():
 
 if __name__ == "__main__":
     try:
-        tc = TurismoClient()
+        # Configure with more workers for heavy telemetry processing
+        tc = TurismoClient(max_callback_workers=18)
     except PlayStatonOnStandbyError as e:
         print("Turn the playstation on")
         print(e)

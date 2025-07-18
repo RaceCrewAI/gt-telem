@@ -3,8 +3,7 @@ import copy
 import logging
 import socket
 import threading
-from collections import deque
-from time import sleep
+from concurrent.futures import ThreadPoolExecutor
 
 from gt_telem.errors.playstation_errors import (PlayStationNotFoundError,
                                                 PlayStatonOnStandbyError)
@@ -17,7 +16,7 @@ class TurismoClient:
     RECEIVE_PORT = 33339
     BIND_PORT = 33340
 
-    def __init__(self, is_gt7: bool=True, ps_ip: str=None, heartbeat_type: str="A"):
+    def __init__(self, is_gt7: bool=True, ps_ip: str=None, heartbeat_type: str="A", max_callback_workers: int=10):
         """
         Initialize TurismoClient.
 
@@ -26,8 +25,13 @@ class TurismoClient:
             - ps_ip (str): PlayStation IP address. If None, it will be discovered.
             - heartbeat_type (str): Heartbeat message type to use. Options: "A" (standard), 
                                   "B" (extended with motion data), "~" (extended with filtered data).
-                                  Default is "A". Note: Only one type can be active per session.        """
+                                  Default is "A". Note: Only one type can be active per session.
+            - max_callback_workers (int): Maximum number of threads for callback execution. Default is 10.
+        """
         self._cancellation_token = None
+        
+        # Create logger for this instance
+        self.logger = logging.getLogger(f"gt-telem.TurismoClient")
         
         # Validate heartbeat type
         if heartbeat_type not in ["A", "B", "~"]:
@@ -42,7 +46,7 @@ class TurismoClient:
         if ps and "STANDBY" in ps:
             raise PlayStatonOnStandbyError(ip)
 
-        logging.info(f"Using the {ps} at {ip} with heartbeat type '{heartbeat_type}'")
+        self.logger.info(f"Using the {ps} at {ip} with heartbeat type '{heartbeat_type}'")
         self.ip_addr: str = ip
 
         if is_gt7:
@@ -55,9 +59,12 @@ class TurismoClient:
         self._loop_thread = threading.Thread(target=self._run_forever_threaded)
         self._telem: Telemetry = None
 
+        # Use a thread pool for callback execution
+        self._callback_executor = ThreadPoolExecutor(
+            max_workers=max_callback_workers, 
+            thread_name_prefix="gt_callback"
+        )
         self._telem_update_callbacks = {}
-        self._telem_callback_queue = asyncio.LifoQueue(maxsize=1)
-        self._processing_callbacks = False
 
     @property
     def telemetry(self) -> Telemetry:
@@ -77,6 +84,7 @@ class TurismoClient:
     def telemetry(self, value: Telemetry) -> None:
         """
         Set the telemetry data and call any registered callbacks.
+        Callbacks are executed asynchronously to avoid blocking telemetry reception.
 
         Parameters:
             - value (Telemetry): Telemetry data to set.
@@ -84,40 +92,41 @@ class TurismoClient:
         with self._telem_lock:
             self._telem = value
 
-        try:
-            self._telem_callback_queue.put_nowait(value)
-        except asyncio.QueueFull:
-            self._telem_callback_queue.get_nowait()
-            self._telem_callback_queue.put_nowait(value)
-        if not self._processing_callbacks:
-            asyncio.create_task(self._process_telemetry_callbacks())
+        # Fire callbacks without blocking - each callback gets its own thread
+        if self._telem_update_callbacks:
+            self._invoke_callbacks(value)
 
     def register_callback(self, callback, args=None):
         """
-        Register an awaitable callback to be invoked when new telemetry is received.
+        Register a callback to be invoked when new telemetry is received.
 
         The telemetry object is sent as the first parameter, and additional
         args can be passed if specified.
 
-        Callbacks are executed off the main thread, potentially compromising
-        state integrity (e.g., using `self.` within your callback won't work).
-        To work around this limitation, declare your callback as a @staticmethod,
-        pass the class instance (self) as an argument, and receive the context of
-        the class in your parameters (after telemetry, which is the first).
+        Callbacks are executed in a thread pool to ensure telemetry reception
+        is never blocked. Both synchronous and asynchronous callbacks are supported.
+        Multiple callbacks run concurrently for optimal performance.
+
+        For thread safety with instance methods, declare your callback as a 
+        @staticmethod and pass the class instance (self) as an argument:
 
         .. code-block:: python
 
             def __init__(self, tc: TurismoClient):
-                tc.add_callback(MyClass.parse_telem, [self])
+                tc.register_callback(MyClass.parse_telem, [self])
 
             @staticmethod
             async def parse_telem(t: Telemetry, context: MyClass):
                 self = context
+                # Your callback logic here...
 
+        Parameters:
+            - callback: The callback function (sync or async)
+            - args: Optional list of additional arguments to pass to the callback
 
-        Additionally, note that the game sends telemetry at the same frequency as
-        the frame rate (~60/s). If your callback takes too long to process and exit,
-        subsequent callbacks will not be invoked until it returns.
+        Note: The game sends telemetry at 60Hz. Callbacks run in separate threads
+        so slow callbacks won't drop telemetry frames, but very heavy processing
+        may still impact overall performance.
         """
         self._telem_update_callbacks[callback] = args
 
@@ -136,6 +145,8 @@ class TurismoClient:
     def stop(self):
         self._cancellation_token.set()
         self._loop_thread.join()
+        # Gracefully shutdown callback threads
+        self._callback_executor.shutdown(wait=True, timeout=5.0)
 
     def _run_forever_threaded(self, cancellation_token: asyncio.Event=None) -> None:
         """
@@ -195,13 +206,14 @@ class TurismoClient:
         Send heartbeat messages at regular intervals to keep the telemetry stream alive.
         Uses the configured heartbeat_type ("A", "B", or "~").
         """
-        logging.info(f"Starting telemetry heartbeat with type '{self.heartbeat_type}'.")
+        self.logger.info(f"Starting telemetry heartbeat with type '{self.heartbeat_type}'.")
         msg: bytes = self.heartbeat_type.encode('ascii')
         while not self._cancellation_token.is_set():
             udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             udp_socket.sendto(msg, (self.ip_addr, self.RECEIVE_PORT))
             udp_socket.close()
             await asyncio.sleep(10)
+        self.logger.info("Stopping telemetry heartbeat.")
 
     async def _listen(self, loop: asyncio.AbstractEventLoop) -> None:
         """
@@ -210,7 +222,7 @@ class TurismoClient:
         Parameters:
             - loop: The asyncio event loop.
         """
-        logging.info(f"Listening for data on {self.ip_addr}:{self.BIND_PORT}")
+        self.logger.info(f"Listening for data on {self.ip_addr}:{self.BIND_PORT}")
 
         class MyDatagramProtocol(asyncio.DatagramProtocol):
             def __init__(self, client):
@@ -224,36 +236,55 @@ class TurismoClient:
             local_addr=("0.0.0.0", self.BIND_PORT)
         )
         await self._cancellation_token.wait()
+        self.logger.info("Stopping telemetry listener.")
         udp_socket.close()
 
-    async def _process_telemetry_callbacks(self):
+    def _invoke_callbacks(self, telemetry_value: Telemetry) -> None:
         """
-        Process telemetry callbacks.
+        Invoke all registered callbacks in a thread pool worker.
+        Handles both sync and async callbacks properly.
+        Each callback runs in its own thread for better resource utilization.
         """
-        self._processing_callbacks = True
-        while True:
+        # Submit each callback to the thread pool individually
+        for callback, args in self._telem_update_callbacks.items():
             try:
-                # Wait for the next telemetry update callback
-                telemetry_value = await self._telem_callback_queue.get()
-
-                # Call the user-provided callback
-                for cb, args in self._telem_update_callbacks.items():
-                    if args:
-                        await cb(telemetry_value, *args)
-                    else:
-                        await cb(telemetry_value)
-
-                # Optionally introduce a delay here if needed
-                await asyncio.sleep(1 / 60)  # 60 Hz update rate
-
-            except asyncio.CancelledError:
-                # The task is cancelled when the event loop is stopped
-                break
+                if asyncio.iscoroutinefunction(callback):
+                    # Async callback - submit to thread pool
+                    self._callback_executor.submit(self._run_async_callback, callback, telemetry_value, args)
+                else:
+                    # Sync callback - submit to thread pool
+                    self._callback_executor.submit(self._run_sync_callback_threaded, callback, telemetry_value, args)
             except Exception as e:
-                # Handle exceptions during callback processing
-                logging.error(f"Error processing telemetry {cb}: {e}")
+                self.logger.error(f"Error submitting callback {callback.__name__}: {e}")
 
-        self._processing_callbacks = False
+    def _run_async_callback(self, callback, telemetry_value, args):
+        """
+        Run an async callback in a thread pool worker.
+        """
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        try:
+            if args:
+                loop.run_until_complete(callback(telemetry_value, *args))
+            else:
+                loop.run_until_complete(callback(telemetry_value))
+        except Exception as e:
+            self.logger.error(f"Error in async callback {callback.__name__}: {e}")
+        finally:
+            loop.close()
+
+    def _run_sync_callback_threaded(self, callback, telemetry_value, args):
+        """
+        Run a sync callback in a thread pool worker.
+        """
+        try:
+            if args:
+                callback(telemetry_value, *args)
+            else:
+                callback(telemetry_value)
+        except Exception as e:
+            self.logger.error(f"Error in sync callback {callback.__name__}: {e}")
 
     def _handle_data(self, data: bytes) -> None:
         """
@@ -265,18 +296,18 @@ class TurismoClient:
         try:
             message: bytes = self._crypto.decrypt(data)
         except Exception as e:
-            logging.debug(f"Failed to decrypt. Error: {e}. Wrong system?")
+            self.logger.debug(f"Failed to decrypt. Error: {e}. Wrong system?")
             return
         # First 4 bytes are header and indicate which system this is
         try:
             header: str = message[:4].decode("ascii")
         except Exception as e:
-            logging.debug(f"Not sure what this is \n{message[:4]}. Error: {e}")
+            self.logger.debug(f"Not sure what this is \n{message[:4]}. Error: {e}")
             return
         message: bytes = message[4:]
         if not header in ["0S7G", "G6S0"]:
             # bad data
-            logging.debug(f"Not sure what this is \n{header}")
+            self.logger.debug(f"Not sure what this is \n{header}")
             return
         if header == "0S7G":
             sr: SpanReader = SpanReader(message, "little")
