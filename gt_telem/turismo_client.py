@@ -13,20 +13,28 @@ from gt_telem.models.telemetry import Telemetry
 from gt_telem.net.crypto import PDEncyption
 from gt_telem.net.device_discover import get_ps_ip_type
 
-
 class TurismoClient:
     RECEIVE_PORT = 33339
     BIND_PORT = 33340
 
-    def __init__(self, is_gt7: bool=True, ps_ip: str=None):
+    def __init__(self, is_gt7: bool=True, ps_ip: str=None, heartbeat_type: str="A"):
         """
         Initialize TurismoClient.
 
         Parameters:
             - is_gt7 (bool): Flag indicating whether it's Gran Turismo 7. Default is True.
             - ps_ip (str): PlayStation IP address. If None, it will be discovered.
-        """
+            - heartbeat_type (str): Heartbeat message type to use. Options: "A" (standard), 
+                                  "B" (extended with motion data), "~" (extended with filtered data).
+                                  Default is "A". Note: Only one type can be active per session.        """
         self._cancellation_token = None
+        
+        # Validate heartbeat type
+        if heartbeat_type not in ["A", "B", "~"]:
+            raise ValueError(f"Invalid heartbeat_type '{heartbeat_type}'. Must be 'A', 'B', or '~'")
+        
+        self.heartbeat_type = heartbeat_type
+        
         ip, ps = get_ps_ip_type()
         ip = ip or ps_ip
         if not ip:
@@ -34,13 +42,13 @@ class TurismoClient:
         if ps and "STANDBY" in ps:
             raise PlayStatonOnStandbyError(ip)
 
-        logging.info(f"Using the {ps} at {ip}")
+        logging.info(f"Using the {ps} at {ip} with heartbeat type '{heartbeat_type}'")
         self.ip_addr: str = ip
 
         if is_gt7:
             self.RECEIVE_PORT += 400
             self.BIND_PORT += 400
-        self._crypto: PDEncyption = PDEncyption(is_gt7)
+        self._crypto: PDEncyption = PDEncyption(is_gt7, heartbeat_type)
 
         self._telem_lock: threading.Lock = threading.Lock()
         # Thread for when run w/o wait:
@@ -182,14 +190,13 @@ class TurismoClient:
         finally:
             # Clean up any resources here if needed
             await loop.shutdown_asyncgens()
-
-
     async def _send_heartbeat(self) -> None:
         """
         Send heartbeat messages at regular intervals to keep the telemetry stream alive.
+        Uses the configured heartbeat_type ("A", "B", or "~").
         """
-        logging.info("Starting telemetry heartbeat.")
-        msg: bytes = b"A"
+        logging.info(f"Starting telemetry heartbeat with type '{self.heartbeat_type}'.")
+        msg: bytes = self.heartbeat_type.encode('ascii')
         while not self._cancellation_token.is_set():
             udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             udp_socket.sendto(msg, (self.ip_addr, self.RECEIVE_PORT))
@@ -280,89 +287,123 @@ class TurismoClient:
     def _parse_telemetry(self, sr: SpanReader) -> None:
         """
         Parse telemetry data from SpanReader and update the telemetry property.
+        Handles different packet sizes based on heartbeat type.
 
         Parameters:
             - sr: SpanReader containing telemetry data.
         """
-        self.telemetry = Telemetry(
-            position_x=sr.read_single(),
-            position_y=sr.read_single(),
-            position_z=sr.read_single(),
-            velocity_x=sr.read_single(),
-            velocity_y=sr.read_single(),
-            velocity_z=sr.read_single(),
-            rotation_x=sr.read_single(),
-            rotation_y=sr.read_single(),
-            rotation_z=sr.read_single(),
-            orientation=sr.read_single(),
-            ang_vel_x=sr.read_single(),
-            ang_vel_y=sr.read_single(),
-            ang_vel_z=sr.read_single(),
-            body_height=sr.read_single(),
-            engine_rpm=sr.read_single(),
-            iv=sr.read_single(),
-            fuel_level=sr.read_single(),
-            fuel_capacity=sr.read_single(),
-            speed_mps=sr.read_single(),
-            boost_pressure=sr.read_single(),
-            oil_pressure=sr.read_single(),
-            water_temp=sr.read_single(),
-            oil_temp=sr.read_single(),
-            tire_fl_temp=sr.read_single(),
-            tire_fr_temp=sr.read_single(),
-            tire_rl_temp=sr.read_single(),
-            tire_rr_temp=sr.read_single(),
-            packet_id=sr.read_int32(),
-            current_lap=sr.read_int16(),
-            total_laps=sr.read_int16(),
-            best_lap_time_ms=sr.read_int32(),
-            last_lap_time_ms=sr.read_int32(),
-            time_of_day_ms=sr.read_int32(),
-            race_start_pos=sr.read_int16(),
-            total_cars=sr.read_int16(),
-            min_alert_rpm=sr.read_int16(),
-            max_alert_rpm=sr.read_int16(),
-            calc_max_speed=sr.read_int16(),
-            flags=sr.read_int16(),
-            bits=sr.read_byte(),
-            throttle=sr.read_byte(),
-            brake=sr.read_byte(),
-            empty=sr.read_byte(),
-            road_plane_x=sr.read_single(),
-            road_plane_y=sr.read_single(),
-            road_plane_z=sr.read_single(),
-            road_plane_dist=sr.read_single(),
-            wheel_fl_rps=sr.read_single(),
-            wheel_fr_rps=sr.read_single(),
-            wheel_rl_rps=sr.read_single(),
-            wheel_rr_rps=sr.read_single(),
-            tire_fl_radius=sr.read_single(),
-            tire_fr_radius=sr.read_single(),
-            tire_rl_radius=sr.read_single(),
-            tire_rr_radius=sr.read_single(),
-            tire_fl_sus_height=sr.read_single(),
-            tire_fr_sus_height=sr.read_single(),
-            tire_rl_sus_height=sr.read_single(),
-            tire_rr_sus_height=sr.read_single(),
-            unused1=sr.read_int32(),
-            unused2=sr.read_int32(),
-            unused3=sr.read_int32(),
-            unused4=sr.read_int32(),
-            unused5=sr.read_int32(),
-            unused6=sr.read_int32(),
-            unused7=sr.read_int32(),
-            unused8=sr.read_int32(),
-            clutch_pedal=sr.read_single(),
-            clutch_engagement=sr.read_single(),
-            trans_rpm=sr.read_single(),
-            trans_top_speed=sr.read_single(),
-            gear1=sr.read_single(),
-            gear2=sr.read_single(),
-            gear3=sr.read_single(),
-            gear4=sr.read_single(),
-            gear5=sr.read_single(),
-            gear6=sr.read_single(),
-            gear7=sr.read_single(),
-            gear8=sr.read_single(),
-            car_code=sr.read_int32(),
-        )
+        # Parse the standard fields (present in all heartbeat types)
+        telemetry_data = {
+            'position_x': sr.read_single(),
+            'position_y': sr.read_single(),
+            'position_z': sr.read_single(),
+            'velocity_x': sr.read_single(),
+            'velocity_y': sr.read_single(),
+            'velocity_z': sr.read_single(),
+            'rotation_x': sr.read_single(),
+            'rotation_y': sr.read_single(),
+            'rotation_z': sr.read_single(),
+            'orientation': sr.read_single(),
+            'ang_vel_x': sr.read_single(),
+            'ang_vel_y': sr.read_single(),
+            'ang_vel_z': sr.read_single(),
+            'body_height': sr.read_single(),
+            'engine_rpm': sr.read_single(),
+            'iv': sr.read_single(),
+            'fuel_level': sr.read_single(),
+            'fuel_capacity': sr.read_single(),
+            'speed_mps': sr.read_single(),
+            'boost_pressure': sr.read_single(),
+            'oil_pressure': sr.read_single(),
+            'water_temp': sr.read_single(),
+            'oil_temp': sr.read_single(),
+            'tire_fl_temp': sr.read_single(),
+            'tire_fr_temp': sr.read_single(),
+            'tire_rl_temp': sr.read_single(),
+            'tire_rr_temp': sr.read_single(),
+            'packet_id': sr.read_int32(),
+            'current_lap': sr.read_int16(),
+            'total_laps': sr.read_int16(),
+            'best_lap_time_ms': sr.read_int32(),
+            'last_lap_time_ms': sr.read_int32(),
+            'time_of_day_ms': sr.read_int32(),
+            'race_start_pos': sr.read_int16(),
+            'total_cars': sr.read_int16(),
+            'min_alert_rpm': sr.read_int16(),
+            'max_alert_rpm': sr.read_int16(),
+            'calc_max_speed': sr.read_int16(),
+            'flags': sr.read_int16(),
+            'bits': sr.read_byte(),
+            'throttle': sr.read_byte(),
+            'brake': sr.read_byte(),
+            'empty': sr.read_byte(),
+            'road_plane_x': sr.read_single(),
+            'road_plane_y': sr.read_single(),
+            'road_plane_z': sr.read_single(),
+            'road_plane_dist': sr.read_single(),
+            'wheel_fl_rps': sr.read_single(),
+            'wheel_fr_rps': sr.read_single(),
+            'wheel_rl_rps': sr.read_single(),
+            'wheel_rr_rps': sr.read_single(),
+            'tire_fl_radius': sr.read_single(),
+            'tire_fr_radius': sr.read_single(),
+            'tire_rl_radius': sr.read_single(),
+            'tire_rr_radius': sr.read_single(),
+            'tire_fl_sus_height': sr.read_single(),
+            'tire_fr_sus_height': sr.read_single(),
+            'tire_rl_sus_height': sr.read_single(),
+            'tire_rr_sus_height': sr.read_single(),
+            'unused1': sr.read_int32(),
+            'unused2': sr.read_int32(),
+            'unused3': sr.read_int32(),
+            'unused4': sr.read_int32(),
+            'unused5': sr.read_int32(),
+            'unused6': sr.read_int32(),
+            'unused7': sr.read_int32(),
+            'unused8': sr.read_int32(),
+            'clutch_pedal': sr.read_single(),
+            'clutch_engagement': sr.read_single(),
+            'trans_rpm': sr.read_single(),
+            'trans_top_speed': sr.read_single(),
+            'gear1': sr.read_single(),
+            'gear2': sr.read_single(),
+            'gear3': sr.read_single(),
+            'gear4': sr.read_single(),
+            'gear5': sr.read_single(),
+            'gear6': sr.read_single(),
+            'gear7': sr.read_single(),
+            'gear8': sr.read_single(),
+            'car_code': sr.read_int32(),
+        }
+        
+        # Parse additional fields based on heartbeat type
+        if self.heartbeat_type == "B":
+            # Heartbeat "B" adds 5 additional floats for motion data
+            telemetry_data.update({
+                'wheel_rotation_radians': sr.read_single(),
+                'filler_float_fb': sr.read_single(),
+                'sway': sr.read_single(),
+                'heave': sr.read_single(),
+                'surge': sr.read_single(),
+            })
+        elif self.heartbeat_type == "~":
+            # Heartbeat "~" adds different extended data
+            # Based on the GitHub issue, it includes filtered throttle/brake and energy recovery
+            telemetry_data.update({
+                'throttle_filtered': sr.read_byte(),
+                'brake_filtered': sr.read_byte(),
+                'unk_tilde_1': sr.read_byte(),
+                'unk_tilde_2': sr.read_byte(),
+            })
+            # Skip some bytes for Vector4 that only Tomahawk seems to use
+            sr.read_single()  # Skip Vec4 component 1
+            sr.read_single()  # Skip Vec4 component 2
+            sr.read_single()  # Skip Vec4 component 3
+            sr.read_single()  # Skip Vec4 component 4
+            # Add the remaining fields
+            telemetry_data.update({
+                'energy_recovery': sr.read_single(),
+                'unk_tilde_3': sr.read_single(),
+            })
+        
+        self.telemetry = Telemetry(**telemetry_data)

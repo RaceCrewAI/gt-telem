@@ -66,15 +66,15 @@ class RaceEvents:
             return
         if self.last.current_lap == 0 and t.current_lap == 1:
             self.race_running = True
-            [x() for x in self.on_race_start]
+            [await x() for x in self.on_race_start]
         if self.race_running and t.total_laps + 1 == t.current_lap:
             self.race_running = False
-            [x() for x in self.on_race_finish]
+            [await x() for x in self.on_race_finish]
         if self.last.current_lap != t.current_lap:
-            [x() for x in self.on_lap_change]
+            [await x() for x in self.on_lap_change]
         if self.last.best_lap_time != t.best_lap_time:
-            [x() for x in self.on_best_lap_time]
+            [await x() for x in self.on_best_lap_time]
         if self.last.last_lap_time != t.last_lap_time:
-            [x() for x in self.on_last_lap_time]
+            [await x() for x in self.on_last_lap_time]
 
         self.last = t

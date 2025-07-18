@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass
@@ -83,3 +84,18 @@ class TelemetryPacket:
     gear7: float
     gear8: float
     car_code: int
+    
+    # Additional fields for heartbeat type "B" (motion data)
+    wheel_rotation_radians: Optional[float] = None
+    filler_float_fb: Optional[float] = None  # Possibly lateral slip angle
+    sway: Optional[float] = None
+    heave: Optional[float] = None
+    surge: Optional[float] = None
+    
+    # Additional fields for heartbeat type "~" (extended data)
+    throttle_filtered: Optional[int] = None  # Filtered throttle value
+    brake_filtered: Optional[int] = None     # Filtered brake value
+    unk_tilde_1: Optional[int] = None       # Unknown field 1
+    unk_tilde_2: Optional[int] = None       # Unknown field 2
+    energy_recovery: Optional[float] = None  # Energy recovery value
+    unk_tilde_3: Optional[float] = None     # Unknown field 3

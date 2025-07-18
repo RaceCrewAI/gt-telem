@@ -31,7 +31,7 @@ class GameEvents:
         self.last = tc.telemetry
         tc.register_callback(GameEvents._state_tracker, [self])
 
-    def _change_state(self, state: GameState):
+    async def _change_state(self, state: GameState):
         events = None
         match state:
             case GameState.RUNNING:
@@ -49,7 +49,7 @@ class GameEvents:
             case _:
                 events = []
         for event in events:
-            event()
+            await event()
         self.game_state = state
 
     @staticmethod
@@ -63,7 +63,7 @@ class GameEvents:
         if self.game_state == GameState.NOT_RUNNING:
             if t is None:
                 return
-            self._change_state(GameState.RUNNING)
+            await self._change_state(GameState.RUNNING)
             logging.debug("Game is running.")
 
         match self.game_state:
@@ -71,41 +71,41 @@ class GameEvents:
                 if t.cars_on_track:
                     if t.is_paused:
                         logging.debug("Race is paused.")
-                        self._change_state(GameState.PAUSED)
+                        await self._change_state(GameState.PAUSED)
                     if t.time_of_day_ms == 43200000:
                         logging.debug("End of a Race.")
-                        self._change_state(GameState.END_RACE)
+                        await self._change_state(GameState.END_RACE)
                     else:
                         logging.debug("In a Race.")
-                        self._change_state(GameState.IN_RACE)
+                        await self._change_state(GameState.IN_RACE)
                 else:
                     if t.current_lap > -1:
                         logging.debug("At a track")
-                        self._change_state(GameState.AT_TRACK)
+                        await self._change_state(GameState.AT_TRACK)
                     else:
                         logging.debug("In a menu.")
-                        self._change_state(GameState.IN_MENU)
+                        await self._change_state(GameState.IN_MENU)
 
             case GameState.IN_MENU:
                 if t.current_lap > -1:
                     logging.debug("At a track")
-                    self._change_state(GameState.AT_TRACK)
+                    await self._change_state(GameState.AT_TRACK)
 
             case GameState.AT_TRACK:
                 if t.cars_on_track and t.current_lap == 0:
                     logging.debug("In a Race.")
-                    self._change_state(GameState.IN_RACE)
+                    await self._change_state(GameState.IN_RACE)
                 elif t.current_lap == -1:
                     logging.debug("In a menu.")
-                    self._change_state(GameState.IN_MENU)
+                    await self._change_state(GameState.IN_MENU)
 
             case GameState.IN_RACE:
                 if t.is_paused:
                     logging.debug("Race is paused.")
-                    self._change_state(GameState.PAUSED)
+                    await self._change_state(GameState.PAUSED)
                 elif t.current_lap == -1:
                     logging.debug("Race ended.")
-                    self._change_state(GameState.END_RACE)
+                    await self._change_state(GameState.END_RACE)
 
             case GameState.PAUSED:
                 if not t.is_paused:
@@ -125,15 +125,15 @@ class GameEvents:
                             self.check_next = 0
                             if t.engine_rpm != self.engine_rpm:
                                 logging.debug("Resuming Race")
-                                self._change_state(GameState.IN_RACE)
+                                await self._change_state(GameState.IN_RACE)
                             else:
                                 logging.debug("Quit Race")
-                                self._change_state(GameState.END_RACE)
+                                await self._change_state(GameState.END_RACE)
 
             case GameState.END_RACE:
                 if t.total_laps == 0 and self.last.current_lap != t.current_lap:
                     logging.debug("At a track")
-                    self._change_state(GameState.AT_TRACK)
+                    await self._change_state(GameState.AT_TRACK)
 
             case _:
                 logging.debug(f"Unhandled state: {self.game_state}")

@@ -6,10 +6,81 @@ Python library for interfacing with Polyphony Digital's telemetry service for mo
 * Asynchronous callbacks
 * Game event observer
 * Telemetry as an object or a dictionary
+* **NEW: Real-time GUI Dashboard** - Visual gauges for steering, throttle, brake, RPM, and gear
 
 ## Installation
 Install with pip:
 `pip install gt-telem`
+
+## GUI Dashboard
+
+A real-time telemetry dashboard is now included! The GUI displays:
+- **RPM Gauge**: Circular gauge showing engine RPM (0-8000)
+- **Steering Gauge**: Shows steering wheel rotation in radians (requires heartbeat type "B")
+- **Throttle Bar**: Horizontal bar showing throttle percentage (green)
+- **Brake Bar**: Horizontal bar showing brake percentage (red)
+- **Gear Display**: Digital gear indicator (N, R, 1-8)
+- **Additional Info**: Speed, lap times, fuel level, race position, motion data
+
+**Note**: The GUI uses heartbeat type "B" to access motion data including steering wheel rotation.
+
+### Running the GUI
+
+#### Main GUI (Requires PlayStation/GT7):
+**Windows:**
+```bash
+# Run the main GUI
+run_gui.bat
+```
+
+**Linux/macOS:**
+```bash
+# Make executable and run
+chmod +x run_gui.sh
+./run_gui.sh
+```
+
+#### Test GUI (No PlayStation Required):
+For testing the GUI components with simulated data:
+
+**Windows:**
+```bash
+# Run the test GUI
+test_gui.bat
+```
+
+**Linux/macOS:**
+```bash
+# Make executable and run
+chmod +x test_gui.sh
+./test_gui.sh
+```
+
+#### Manual Method:
+```bash
+# Activate virtual environment first
+# Windows:
+.venv\Scripts\activate.bat
+# Linux/macOS:
+source .venv/bin/activate
+
+# Then run either GUI
+python gt_telemetry_gui.py     # Main GUI
+python test_gui.py             # Test GUI
+```
+
+**Requirements:**
+- Gran Turismo 7 running on PlayStation
+- Telemetry enabled in GT7 settings
+- PlayStation and PC on the same network
+- Python 3.7+ with tkinter (included with most Python installations)
+
+### GUI Features:
+- **Real-time Updates**: 60 FPS refresh rate for smooth gauge movement
+- **Connection Management**: Easy connect/disconnect with status indicators
+- **Error Handling**: Clear error messages for connection issues
+- **Modern Interface**: Dark theme with colorful gauges
+- **Responsive Design**: Scales well on different screen sizes
 
 ## Usage
 
@@ -136,3 +207,62 @@ if __name__ == "__main__":
 
 ### Advanced Example
 See [this jupyter notebook](https://gist.github.com/Jonpro03/5856bc6df506f4d3c7741d4cb42157f1) that displays a live race view and how to properly pass a token to shut down gracefully.
+
+## Heartbeat Types
+
+Gran Turismo 7 supports different heartbeat message types that provide additional telemetry data. You can specify the heartbeat type when creating a `TurismoClient`:
+
+```python
+from gt_telem import TurismoClient
+
+# Standard heartbeat (default) - 296 bytes
+tc_standard = TurismoClient(heartbeat_type="A")
+
+# Motion data heartbeat - 316 bytes with additional motion fields
+tc_motion = TurismoClient(heartbeat_type="B")
+
+# Extended data heartbeat - includes filtered inputs and energy recovery
+tc_extended = TurismoClient(heartbeat_type="~")
+```
+
+### Heartbeat Type "A" (Standard)
+This is the default format that provides all the standard telemetry data. Compatible with most existing GT7 telemetry applications.
+
+### Heartbeat Type "B" (Motion Data)
+Adds 5 additional motion-related fields:
+- `wheel_rotation_radians` - Wheel rotation in radians
+- `filler_float_fb` - Possibly lateral slip angle or other motion data
+- `sway` - Vehicle sway motion
+- `heave` - Vehicle heave motion  
+- `surge` - Vehicle surge motion
+
+Access motion data using the `motion_data` property:
+```python
+telemetry = tc.telemetry
+if telemetry and telemetry.motion_data:
+    motion = telemetry.motion_data
+    print(f"Sway: {motion['sway']:.3f}")
+    print(f"Heave: {motion['heave']:.3f}")
+    print(f"Surge: {motion['surge']:.3f}")
+```
+
+### Heartbeat Type "~" (Extended Data)
+Provides additional fields including:
+- `throttle_filtered` - Filtered throttle input
+- `brake_filtered` - Filtered brake input
+- `energy_recovery` - Energy recovery value
+- Additional unknown fields for future expansion
+
+Access extended data using the `extended_data` property:
+```python
+telemetry = tc.telemetry
+if telemetry and telemetry.extended_data:
+    extended = telemetry.extended_data
+    print(f"Energy Recovery: {extended['energy_recovery']:.3f}")
+    print(f"Filtered Throttle: {extended['throttle_filtered']}")
+```
+
+### Important Notes
+- **Only one heartbeat type can be active per session.** The first heartbeat sent to the game "wins" and cannot be changed until the game stops sending telemetry.
+- Different heartbeat types use different encryption keys (IV masks: A=`0xDEADBEAF`, B=`0xDEADBEEF`, ~=`0x55FABB4F`), which can cause compatibility issues between applications using different formats.
+- Not all applications support the extended heartbeat formats. Use type "A" for maximum compatibility.
