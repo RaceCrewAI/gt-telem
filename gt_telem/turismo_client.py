@@ -146,7 +146,7 @@ class TurismoClient:
         self._cancellation_token.set()
         self._loop_thread.join()
         # Gracefully shutdown callback threads
-        self._callback_executor.shutdown(wait=True, timeout=5.0)
+        self._callback_executor.shutdown(wait=True, cancel_futures=True)
 
     def _run_forever_threaded(self, cancellation_token: asyncio.Event=None) -> None:
         """
