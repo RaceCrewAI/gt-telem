@@ -13,6 +13,7 @@ class RaceEvents:
         on_lap_change (List[Callable]): List of callbacks to be executed when the lap changes.
         on_best_lap_time (List[Callable]): List of callbacks to be executed when the best lap time changes.
         on_last_lap_time (List[Callable]): List of callbacks to be executed when the last lap time changes.
+        on_track_detected (List[Callable]): List of callbacks to be executed when a track is detected.
 
     Methods:
         __init__(self, tc: TurismoClient):
@@ -31,7 +32,7 @@ class RaceEvents:
         race.on_last_lap_time.append(lambda: print("Last lap time changed!"))
 
         # Start the TurismoClient
-        asyncio.run(tc.run())
+        tc.run()
     """
 
     on_race_start: list[Callable] = []
@@ -39,6 +40,7 @@ class RaceEvents:
     on_lap_change: list[Callable] = []
     on_best_lap_time: list[Callable] = []
     on_last_lap_time: list[Callable] = []
+    on_track_detected: list[Callable] = []
 
     def __init__(self, tc: TurismoClient):
         """
@@ -76,5 +78,6 @@ class RaceEvents:
             [await x(t.best_lap_time) for x in self.on_best_lap_time]
         if self.last.last_lap_time != t.last_lap_time:
             [await x(t.last_lap_time) for x in self.on_last_lap_time]
-
+        if self.last.track_id != t.track_id:
+            [await x(t.track_id) for x in self.on_track_detected]
         self.last = t

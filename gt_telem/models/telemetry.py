@@ -139,6 +139,8 @@ class Telemetry(TelemetryPacket):
     - best_lap_time: Get the formatted best lap time.
     - last_lap_time: Get the formatted last lap time.
     - time_of_day: Get the formatted time of day.
+    - track_id: Get the track ID.
+    Note the value is not included in the telemetry packet itself but gets computed during a race.
 
     Methods
     - as_dict: Get the state of the object in a dictionary format.
@@ -390,6 +392,13 @@ class Telemetry(TelemetryPacket):
         if self.time_of_day_ms == -1:
             return None
         return format_time_of_day(self.time_of_day_ms)
+    
+    @property
+    def track_id(self) -> int:
+        """
+        Get the track ID.
+        """
+        return self._track_id
 
     @property
     def as_dict(self):
@@ -450,6 +459,7 @@ class Telemetry(TelemetryPacket):
             "best_lap_time": self.best_lap_time,
             "last_lap_time": self.last_lap_time,
             "time_of_day": self.time_of_day,
+            "track_id": self.track_id,
         }
 
         result = dict(self.__dict__, **added)

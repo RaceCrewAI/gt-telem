@@ -11,6 +11,7 @@ from gt_telem.models.helpers import SpanReader
 from gt_telem.models.telemetry import Telemetry
 from gt_telem.net.crypto import PDEncyption
 from gt_telem.net.device_discover import get_ps_ip_type
+from gt_telem.trackdetector import TrackDetector
 
 class TurismoClient:
     RECEIVE_PORT = 33339
@@ -65,6 +66,7 @@ class TurismoClient:
             thread_name_prefix="gt_callback"
         )
         self._telem_update_callbacks = {}
+        self._track_detector: TrackDetector = TrackDetector()
 
     @property
     def telemetry(self) -> Telemetry:
@@ -89,6 +91,8 @@ class TurismoClient:
         Parameters:
             - value (Telemetry): Telemetry data to set.
         """
+        value._track_id = self._track_detector.detect_track(value)
+
         with self._telem_lock:
             self._telem = value
 
