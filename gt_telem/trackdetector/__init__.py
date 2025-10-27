@@ -1,1 +1,2 @@
 from gt_telem.trackdetector.track_detector import TrackDetector
+from gt_telem.trackdetector.track_names import TRACK_NAMES
