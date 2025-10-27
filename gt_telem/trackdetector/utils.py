@@ -1,3 +1,6 @@
+# Portions of this file are adapted from gt7telemetry by Bornhall:
+#   https://github.com/Bornhall/gt7telemetry/blob/main/gt7trackdetect.py
+
 MAX_MATCHES = 3
 ALLOWED_IOU_DEVIATION = 0.02
 

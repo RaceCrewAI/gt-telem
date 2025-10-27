@@ -1,3 +1,6 @@
+# Portions of this file are adapted from gt7telemetry by Bornhall:
+#   https://github.com/Bornhall/gt7telemetry/blob/main/gt7trackdetect.py
+
 import os
 import csv
 from gt_telem.models import Telemetry
