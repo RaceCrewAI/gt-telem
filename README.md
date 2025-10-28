@@ -87,6 +87,7 @@ The following events are currently supported:
   * on_lap_change - Fires when the lap counter changes (including 0->1)
   * on_best_lap_time - A new best lap is set
   * on_last_lap_time - A new last lap time is available
+  * on_track_detected - Track has been detected
 * gt_telem.events.DriverEvents
   * on_gear_change - A gear has changed
   * on_flash_lights - High Beams have been activated
@@ -131,7 +132,7 @@ if __name__ == "__main__":
     try:
         # Configure with more workers for heavy telemetry processing
         tc = TurismoClient(max_callback_workers=18)
-    except PlayStatonOnStandbyError as e:
+    except PlayStationOnStandbyError as e:
         print("Turn the playstation on")
         print(e)
         exit()
