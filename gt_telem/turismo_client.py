@@ -6,7 +6,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 from gt_telem.errors.playstation_errors import (PlayStationNotFoundError,
-                                                PlayStatonOnStandbyError)
+                                                PlayStationOnStandbyError)
 from gt_telem.models.helpers import SpanReader
 from gt_telem.models.telemetry import Telemetry
 from gt_telem.net.crypto import PDEncyption
@@ -45,7 +45,7 @@ class TurismoClient:
         if not ip:
             raise PlayStationNotFoundError()
         if ps and "STANDBY" in ps:
-            raise PlayStatonOnStandbyError(ip)
+            raise PlayStationOnStandbyError(ip)
 
         self.logger.info(f"Using the {ps} at {ip} with heartbeat type '{heartbeat_type}'")
         self.ip_addr: str = ip

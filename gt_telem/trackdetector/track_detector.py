@@ -1,8 +1,8 @@
 # Portions of this file are adapted from gt7telemetry by Bornhall:
 #   https://github.com/Bornhall/gt7telemetry/blob/main/gt7trackdetect.py
 
-import os
 import csv
+from importlib.resources import files
 from gt_telem.models import Telemetry
 from gt_telem.trackdetector.utils import TrackBounds, find_matching_track
 
@@ -22,7 +22,7 @@ class TrackDetector:
         self._old_xyz: tuple[float, float] = None
         self._maxX = self._maxY = -999999.9
         self._minX = self._minY = 999999.9
-        self._track_bounds = self._read_track_bounds(os.path.join(os.path.dirname(__file__), 'gt7trackdetect.csv'))
+        self._track_bounds = self._read_track_bounds()
 
     def detect_track(self, telemetry: Telemetry) -> int:
         """
@@ -60,7 +60,7 @@ class TrackDetector:
         self._old_xyz = new_xyz
         return track_id
 
-    def _read_track_bounds(self, filename):
-        with open(filename, 'r') as f:
-            rows = list(csv.DictReader(f))
+    def _read_track_bounds(self):
+        csv_data = files('gt_telem.data').joinpath('gt7trackdetect.csv').read_text()
+        rows = list(csv.DictReader(csv_data.splitlines()))
         return [TrackBounds(**row) for row in rows]

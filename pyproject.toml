@@ -27,6 +27,9 @@ dev = ["black", "bumpver", "isort", "pandas", "pre-commit"]
 [project.urls]
 Homepage = "https://github.com/RaceCrewAI"
 
+[tool.setuptools.package-data]
+gt_telem = ["data/*.csv"]
+
 [tool.bumpver]
 current_version = "1.2.0"
 version_pattern = "MAJOR.MINOR.PATCH"
