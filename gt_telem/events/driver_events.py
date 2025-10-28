@@ -42,13 +42,13 @@ class DriverEvents:
         # Example usage:
         tc = TurismoClient()
         driver = DriverEvents(tc)
-        
+
         # All callbacks are async and receive the relevant value as a parameter
         driver.on_gear_change.append(lambda gear: print(f"Gear changed to: {gear}"))
         driver.on_flash_lights.append(lambda state: print(f"High beams: {state}"))
         driver.on_brake.append(lambda brake_value: print(f"Brake applied: {brake_value}"))
         driver.on_shift_light_low.append(lambda rpm: print(f"Low shift light at RPM: {rpm}"))
-        
+
         # Start the TurismoClient
         tc.run()
     """
@@ -81,7 +81,7 @@ class DriverEvents:
     async def _state_tracker(t, context):
         """
         Static async callback function to track driver-related events based on telemetry data.
-        
+
         This method compares the current telemetry data with the previous state to detect
         changes and trigger appropriate event callbacks. All callbacks are awaited and
         receive the relevant telemetry value as a parameter.
@@ -89,7 +89,7 @@ class DriverEvents:
         Parameters:
             t: Current telemetry data object containing all vehicle state information.
             context: The DriverEvents instance (passed as context since this is a static method).
-            
+
         Events Triggered:
             - on_gear_change: When current_gear changes from previous value
             - on_flash_lights: When high_beams transitions from False to True

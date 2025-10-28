@@ -13,6 +13,7 @@ from gt_telem.net.crypto import PDEncyption
 from gt_telem.net.device_discover import get_ps_ip_type
 from gt_telem.trackdetector import TrackDetector
 
+
 class TurismoClient:
     RECEIVE_PORT = 33339
     BIND_PORT = 33340
@@ -24,22 +25,22 @@ class TurismoClient:
         Parameters:
             - is_gt7 (bool): Flag indicating whether it's Gran Turismo 7. Default is True.
             - ps_ip (str): PlayStation IP address. If None, it will be discovered.
-            - heartbeat_type (str): Heartbeat message type to use. Options: "A" (standard), 
+            - heartbeat_type (str): Heartbeat message type to use. Options: "A" (standard),
                                   "B" (extended with motion data), "~" (extended with filtered data).
                                   Default is "A". Note: Only one type can be active per session.
             - max_callback_workers (int): Maximum number of threads for callback execution. Default is 10.
         """
         self._cancellation_token = None
-        
+
         # Create logger for this instance
         self.logger = logging.getLogger(f"gt-telem.TurismoClient")
-        
+
         # Validate heartbeat type
         if heartbeat_type not in ["A", "B", "~"]:
             raise ValueError(f"Invalid heartbeat_type '{heartbeat_type}'. Must be 'A', 'B', or '~'")
-        
+
         self.heartbeat_type = heartbeat_type
-        
+
         ip, ps = get_ps_ip_type()
         ip = ip or ps_ip
         if not ip:
@@ -62,7 +63,7 @@ class TurismoClient:
 
         # Use a thread pool for callback execution
         self._callback_executor = ThreadPoolExecutor(
-            max_workers=max_callback_workers, 
+            max_workers=max_callback_workers,
             thread_name_prefix="gt_callback"
         )
         self._telem_update_callbacks = {}
@@ -111,7 +112,7 @@ class TurismoClient:
         is never blocked. Both synchronous and asynchronous callbacks are supported.
         Multiple callbacks run concurrently for optimal performance.
 
-        For thread safety with instance methods, declare your callback as a 
+        For thread safety with instance methods, declare your callback as a
         @staticmethod and pass the class instance (self) as an argument:
 
         .. code-block:: python
@@ -267,7 +268,7 @@ class TurismoClient:
         """
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        
+
         try:
             if args:
                 loop.run_until_complete(callback(telemetry_value, *args))
@@ -410,7 +411,7 @@ class TurismoClient:
             'gear8': sr.read_single(),
             'car_code': sr.read_int32(),
         }
-        
+
         # Parse additional fields based on heartbeat type
         if self.heartbeat_type == "B":
             # Heartbeat "B" adds 5 additional floats for motion data
@@ -440,5 +441,5 @@ class TurismoClient:
                 'energy_recovery': sr.read_single(),
                 'unk_tilde_3': sr.read_single(),
             })
-        
+
         self.telemetry = Telemetry(**telemetry_data)

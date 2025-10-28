@@ -392,7 +392,7 @@ class Telemetry(TelemetryPacket):
         if self.time_of_day_ms == -1:
             return None
         return format_time_of_day(self.time_of_day_ms)
-    
+
     @property
     def track_id(self) -> int:
         """
@@ -541,9 +541,9 @@ class Telemetry(TelemetryPacket):
         Get motion data available in heartbeat type "B" as a dictionary.
         Returns None if motion data is not available.
         """
-        if (self.wheel_rotation_radians is not None and 
-            self.sway is not None and 
-            self.heave is not None and 
+        if (self.wheel_rotation_radians is not None and
+            self.sway is not None and
+            self.heave is not None and
             self.surge is not None):
             return {
                 'wheel_rotation_radians': self.wheel_rotation_radians,
@@ -560,8 +560,8 @@ class Telemetry(TelemetryPacket):
         Get extended data available in heartbeat type "~" as a dictionary.
         Returns None if extended data is not available.
         """
-        if (self.throttle_filtered is not None and 
-            self.brake_filtered is not None and 
+        if (self.throttle_filtered is not None and
+            self.brake_filtered is not None and
             self.energy_recovery is not None):
             return {
                 'throttle_filtered': self.throttle_filtered,

@@ -84,14 +84,14 @@ class TelemetryPacket:
     gear7: float
     gear8: float
     car_code: int
-    
+
     # Additional fields for heartbeat type "B" (motion data)
     wheel_rotation_radians: Optional[float] = None
     filler_float_fb: Optional[float] = None  # Possibly lateral slip angle
     sway: Optional[float] = None
     heave: Optional[float] = None
     surge: Optional[float] = None
-    
+
     # Additional fields for heartbeat type "~" (extended data)
     throttle_filtered: Optional[int] = None  # Filtered throttle value
     brake_filtered: Optional[int] = None     # Filtered brake value

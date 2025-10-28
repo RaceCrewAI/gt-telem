@@ -179,7 +179,7 @@ Adds 5 additional motion-related fields:
 - `wheel_rotation_radians` - Wheel rotation in radians
 - `filler_float_fb` - Possibly lateral slip angle or other motion data
 - `sway` - Vehicle sway motion
-- `heave` - Vehicle heave motion  
+- `heave` - Vehicle heave motion
 - `surge` - Vehicle surge motion
 
 Access motion data using the `motion_data` property:

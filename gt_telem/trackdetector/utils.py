@@ -58,7 +58,7 @@ def line_intersects(p0_x, p0_y, p1_x, p1_y, p2_x, p2_y, p3_x, p3_y):
 	if denominator == 0:
 		# Lines are parallel or coincident, no intersection
 		return (0, '--')
-	
+
 	s = (-s1_y * (p0_x - p2_x) + s1_x * (p0_y - p2_y)) / denominator
 	t = (s2_x * (p0_y - p2_y) - s2_y * (p0_x - p2_x)) / denominator
 	d = get_direction(s2_x, s2_y)

@@ -22,7 +22,7 @@ dependencies = [
 requires-python = ">=3.10"
 
 [project.optional-dependencies]
-dev = ["black", "bumpver", "isort", "pandas", "pre-commit"]
+dev = ["black", "bumpver", "isort", "pandas", "pre-commit", "pytest", "pytest-cov", "python-semantic-release"]
 
 [project.urls]
 Homepage = "https://github.com/RaceCrewAI"
@@ -50,3 +50,29 @@ push = true
 "gt_telem/__init__.py" = [
     '__version__ = "{version}"'
 ]
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+version_variables = [
+    "gt_telem/__init__.py:__version__",
+]
+branch = "main"
+upload_to_pypi = false
+upload_to_release = true
+build_command = "pip install build && python -m build"
+major_on_zero = true
+tag_format = "v{version}"
+
+[tool.semantic_release.commit_parser_options]
+allowed_tags = ["feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore", "revert"]
+minor_tags = ["feat"]
+patch_tags = ["fix", "perf"]
+
+[tool.semantic_release.branches.main]
+match = "main"
+prerelease = false
+
+[tool.semantic_release.changelog]
+template_dir = "templates"
+changelog_file = "CHANGELOG.md"
+exclude_commit_patterns = []

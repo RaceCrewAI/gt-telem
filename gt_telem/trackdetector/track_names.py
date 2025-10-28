@@ -1,7 +1,6 @@
 import csv
 from importlib.resources import files
 
-
 TRACK_NAMES = {}
 
 csv_data = files('gt_telem.data').joinpath('track_names.csv').read_text()

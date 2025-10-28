@@ -18,7 +18,7 @@ class PDEncyption:
     def __init__(self, is_gt7, heartbeat_type: str = "A"):
         self.is_gt7 = is_gt7
         self.heartbeat_type = heartbeat_type
-        
+
         # Set the appropriate IV mask based on heartbeat type
         if heartbeat_type == "A":
             self._iv_mask = self._IV_MASK_A
@@ -42,7 +42,7 @@ class PDEncyption:
         seed = struct.unpack("<I", ciphertext[0x40:0x44])[0]
         iv = seed ^ self._iv_mask
         iv_bytes = struct.pack("<II", iv, seed)
-        
+
         # Use pycryptodome Salsa20
         key = self._GT7_KEY[:32] if self.is_gt7 else self._DEFAULT_KEY[:32]
         cipher = Salsa20.new(key=key, nonce=iv_bytes)
