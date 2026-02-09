@@ -3,6 +3,7 @@ import logging
 from enum import Enum
 from typing import Callable, List
 
+from gt_telem.events.event_utils import invoke_callbacks
 from gt_telem.turismo_client import TurismoClient
 
 
@@ -48,11 +49,7 @@ class GameEvents:
                 events = self.on_race_end
             case _:
                 events = []
-        for event in events:
-            if asyncio.iscoroutinefunction(event):
-                await event()
-            else:
-                event()
+        await invoke_callbacks(events)
         self.game_state = state
 
     @staticmethod

@@ -1,6 +1,7 @@
 import asyncio
 from typing import Callable, List
 
+from gt_telem.events.event_utils import invoke_callbacks
 from gt_telem.turismo_client import TurismoClient
 
 
@@ -109,77 +110,33 @@ class DriverEvents:
             self.last = t
             return
         if self.last.current_gear != t.current_gear:
-            for x in self.on_gear_change:
-                if asyncio.iscoroutinefunction(x):
-                    await x(t.current_gear)
-                else:
-                    x(t.current_gear)
+            await invoke_callbacks(self.on_gear_change, t.current_gear)
         if not self.last.high_beams and t.high_beams:
-            for x in self.on_flash_lights:
-                if asyncio.iscoroutinefunction(x):
-                    await x(t.high_beams)
-                else:
-                    x(t.high_beams)
+            await invoke_callbacks(self.on_flash_lights, t.high_beams)
         if not self.last.hand_brake_active and t.hand_brake_active:
-            for x in self.on_handbrake:
-                if asyncio.iscoroutinefunction(x):
-                    await x(t.hand_brake_active)
-                else:
-                    x(t.hand_brake_active)
+            await invoke_callbacks(self.on_handbrake, t.hand_brake_active)
         if self.last.suggested_gear != t.suggested_gear:
-            for x in self.on_suggested_gear:
-                if asyncio.iscoroutinefunction(x):
-                    await x(t.suggested_gear)
-                else:
-                    x(t.suggested_gear)
+            await invoke_callbacks(self.on_suggested_gear, t.suggested_gear)
         if self.last.tcs_active != t.tcs_active:
-            for x in self.on_tcs:
-                if asyncio.iscoroutinefunction(x):
-                    await x(t.tcs_active)
-                else:
-                    x(t.tcs_active)
+            await invoke_callbacks(self.on_tcs, t.tcs_active)
         if self.last.asm_active != t.asm_active:
-            for x in self.on_asm:
-                if asyncio.iscoroutinefunction(x):
-                    await x(t.asm_active)
-                else:
-                    x(t.asm_active)
+            await invoke_callbacks(self.on_asm, t.asm_active)
         if self.last.rev_limit != t.rev_limit:
-            for x in self.on_rev_limit:
-                if asyncio.iscoroutinefunction(x):
-                    await x(t.rev_limit)
-                else:
-                    x(t.rev_limit)
+            await invoke_callbacks(self.on_rev_limit, t.rev_limit)
         if self.last.brake == 0 and t.brake > 0:
-            for x in self.on_brake:
-                if asyncio.iscoroutinefunction(x):
-                    await x(t.brake)
-                else:
-                    x(t.brake)
+            await invoke_callbacks(self.on_brake, t.brake)
         if self.last.throttle == 0 and t.throttle > 0:
-            for x in self.on_throttle:
-                if asyncio.iscoroutinefunction(x):
-                    await x(t.throttle)
-                else:
-                    x(t.throttle)
+            await invoke_callbacks(self.on_throttle, t.throttle)
         if t.engine_rpm > t.min_alert_rpm:
             if not self.above_min_alert_rpm:
                 self.above_min_alert_rpm = True
-                for x in self.on_shift_light_low:
-                    if asyncio.iscoroutinefunction(x):
-                        await x(t.engine_rpm)
-                    else:
-                        x(t.engine_rpm)
+                await invoke_callbacks(self.on_shift_light_low, t.engine_rpm)
         elif self.above_min_alert_rpm:
             self.above_min_alert_rpm = False
         if t.engine_rpm > t.max_alert_rpm:
             if not self.above_max_alert_rpm:
                 self.above_max_alert_rpm = True
-                for x in self.on_shift_light_high:
-                    if asyncio.iscoroutinefunction(x):
-                        await x(t.engine_rpm)
-                    else:
-                        x(t.engine_rpm)
+                await invoke_callbacks(self.on_shift_light_high, t.engine_rpm)
         elif self.above_max_alert_rpm:
             self.above_max_alert_rpm = False
 

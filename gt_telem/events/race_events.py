@@ -1,6 +1,7 @@
 import asyncio
 from typing import Callable, List
 
+from gt_telem.events.event_utils import invoke_callbacks
 from gt_telem.turismo_client import TurismoClient
 
 
@@ -69,40 +70,16 @@ class RaceEvents:
             return
         if self.last.current_lap == 0 and t.current_lap == 1:
             self.race_running = True
-            for x in self.on_race_start:
-                if asyncio.iscoroutinefunction(x):
-                    await x()
-                else:
-                    x()
+            await invoke_callbacks(self.on_race_start)
         if self.race_running and t.total_laps + 1 == t.current_lap:
             self.race_running = False
-            for x in self.on_race_finish:
-                if asyncio.iscoroutinefunction(x):
-                    await x()
-                else:
-                    x()
+            await invoke_callbacks(self.on_race_finish)
         if self.last.current_lap != t.current_lap:
-            for x in self.on_lap_change:
-                if asyncio.iscoroutinefunction(x):
-                    await x(t.current_lap)
-                else:
-                    x(t.current_lap)
+            await invoke_callbacks(self.on_lap_change, t.current_lap)
         if self.last.best_lap_time != t.best_lap_time:
-            for x in self.on_best_lap_time:
-                if asyncio.iscoroutinefunction(x):
-                    await x(t.best_lap_time)
-                else:
-                    x(t.best_lap_time)
+            await invoke_callbacks(self.on_best_lap_time, t.best_lap_time)
         if self.last.last_lap_time != t.last_lap_time:
-            for x in self.on_last_lap_time:
-                if asyncio.iscoroutinefunction(x):
-                    await x(t.last_lap_time)
-                else:
-                    x(t.last_lap_time)
+            await invoke_callbacks(self.on_last_lap_time, t.last_lap_time)
         if self.last.track_id != t.track_id:
-            for x in self.on_track_detected:
-                if asyncio.iscoroutinefunction(x):
-                    await x(t.track_id)
-                else:
-                    x(t.track_id)
+            await invoke_callbacks(self.on_track_detected, t.track_id)
         self.last = t
