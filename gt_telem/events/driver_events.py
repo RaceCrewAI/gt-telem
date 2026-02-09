@@ -1,3 +1,4 @@
+import asyncio
 from typing import Callable, List
 
 from gt_telem.turismo_client import TurismoClient
@@ -108,33 +109,77 @@ class DriverEvents:
             self.last = t
             return
         if self.last.current_gear != t.current_gear:
-            [await x(t.current_gear) for x in self.on_gear_change]
+            for x in self.on_gear_change:
+                if asyncio.iscoroutinefunction(x):
+                    await x(t.current_gear)
+                else:
+                    x(t.current_gear)
         if not self.last.high_beams and t.high_beams:
-            [await x(t.high_beams) for x in self.on_flash_lights]
+            for x in self.on_flash_lights:
+                if asyncio.iscoroutinefunction(x):
+                    await x(t.high_beams)
+                else:
+                    x(t.high_beams)
         if not self.last.hand_brake_active and t.hand_brake_active:
-            [await x(t.hand_brake_active) for x in self.on_handbrake]
+            for x in self.on_handbrake:
+                if asyncio.iscoroutinefunction(x):
+                    await x(t.hand_brake_active)
+                else:
+                    x(t.hand_brake_active)
         if self.last.suggested_gear != t.suggested_gear:
-            [await x(t.suggested_gear) for x in self.on_suggested_gear]
+            for x in self.on_suggested_gear:
+                if asyncio.iscoroutinefunction(x):
+                    await x(t.suggested_gear)
+                else:
+                    x(t.suggested_gear)
         if self.last.tcs_active != t.tcs_active:
-            [await x(t.tcs_active) for x in self.on_tcs]
+            for x in self.on_tcs:
+                if asyncio.iscoroutinefunction(x):
+                    await x(t.tcs_active)
+                else:
+                    x(t.tcs_active)
         if self.last.asm_active != t.asm_active:
-            [await x(t.asm_active) for x in self.on_asm]
+            for x in self.on_asm:
+                if asyncio.iscoroutinefunction(x):
+                    await x(t.asm_active)
+                else:
+                    x(t.asm_active)
         if self.last.rev_limit != t.rev_limit:
-            [await x(t.rev_limit) for x in self.on_rev_limit]
+            for x in self.on_rev_limit:
+                if asyncio.iscoroutinefunction(x):
+                    await x(t.rev_limit)
+                else:
+                    x(t.rev_limit)
         if self.last.brake == 0 and t.brake > 0:
-            [await x(t.brake) for x in self.on_brake]
+            for x in self.on_brake:
+                if asyncio.iscoroutinefunction(x):
+                    await x(t.brake)
+                else:
+                    x(t.brake)
         if self.last.throttle == 0 and t.throttle > 0:
-            [await x(t.throttle) for x in self.on_throttle]
+            for x in self.on_throttle:
+                if asyncio.iscoroutinefunction(x):
+                    await x(t.throttle)
+                else:
+                    x(t.throttle)
         if t.engine_rpm > t.min_alert_rpm:
             if not self.above_min_alert_rpm:
                 self.above_min_alert_rpm = True
-                [await x(t.engine_rpm) for x in self.on_shift_light_low]
+                for x in self.on_shift_light_low:
+                    if asyncio.iscoroutinefunction(x):
+                        await x(t.engine_rpm)
+                    else:
+                        x(t.engine_rpm)
         elif self.above_min_alert_rpm:
             self.above_min_alert_rpm = False
         if t.engine_rpm > t.max_alert_rpm:
             if not self.above_max_alert_rpm:
                 self.above_max_alert_rpm = True
-                [await x(t.engine_rpm) for x in self.on_shift_light_high]
+                for x in self.on_shift_light_high:
+                    if asyncio.iscoroutinefunction(x):
+                        await x(t.engine_rpm)
+                    else:
+                        x(t.engine_rpm)
         elif self.above_max_alert_rpm:
             self.above_max_alert_rpm = False
 

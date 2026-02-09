@@ -7,12 +7,12 @@ from gt_telem.turismo_client import TurismoClient
 
 
 class GameState(Enum):
-    NOT_RUNNING = 0,
-    RUNNING = 1,
-    IN_MENU = 2,
-    AT_TRACK = 3,
-    IN_RACE = 4,
-    PAUSED = 5,
+    NOT_RUNNING = (0,)
+    RUNNING = (1,)
+    IN_MENU = (2,)
+    AT_TRACK = (3,)
+    IN_RACE = (4,)
+    PAUSED = (5,)
     END_RACE = 6
 
 
@@ -49,7 +49,10 @@ class GameEvents:
             case _:
                 events = []
         for event in events:
-            await event()
+            if asyncio.iscoroutinefunction(event):
+                await event()
+            else:
+                event()
         self.game_state = state
 
     @staticmethod
