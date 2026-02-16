@@ -6,10 +6,10 @@ in event handler classes.
 """
 
 import asyncio
-from typing import Any, Callable, List
+from typing import Any, Callable
 
 
-async def invoke_callbacks(callbacks: List[Callable], *args: Any) -> None:
+async def invoke_callbacks(callbacks: list[Callable], *args: Any) -> None:
     """
     Invoke a list of callbacks, handling both sync and async callbacks.
 
