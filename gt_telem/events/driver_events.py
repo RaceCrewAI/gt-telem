@@ -1,5 +1,7 @@
+import asyncio
 from typing import Callable, List
 
+from gt_telem.events.event_utils import invoke_callbacks
 from gt_telem.turismo_client import TurismoClient
 
 
@@ -108,33 +110,33 @@ class DriverEvents:
             self.last = t
             return
         if self.last.current_gear != t.current_gear:
-            [await x(t.current_gear) for x in self.on_gear_change]
+            await invoke_callbacks(self.on_gear_change, t.current_gear)
         if not self.last.high_beams and t.high_beams:
-            [await x(t.high_beams) for x in self.on_flash_lights]
+            await invoke_callbacks(self.on_flash_lights, t.high_beams)
         if not self.last.hand_brake_active and t.hand_brake_active:
-            [await x(t.hand_brake_active) for x in self.on_handbrake]
+            await invoke_callbacks(self.on_handbrake, t.hand_brake_active)
         if self.last.suggested_gear != t.suggested_gear:
-            [await x(t.suggested_gear) for x in self.on_suggested_gear]
+            await invoke_callbacks(self.on_suggested_gear, t.suggested_gear)
         if self.last.tcs_active != t.tcs_active:
-            [await x(t.tcs_active) for x in self.on_tcs]
+            await invoke_callbacks(self.on_tcs, t.tcs_active)
         if self.last.asm_active != t.asm_active:
-            [await x(t.asm_active) for x in self.on_asm]
+            await invoke_callbacks(self.on_asm, t.asm_active)
         if self.last.rev_limit != t.rev_limit:
-            [await x(t.rev_limit) for x in self.on_rev_limit]
+            await invoke_callbacks(self.on_rev_limit, t.rev_limit)
         if self.last.brake == 0 and t.brake > 0:
-            [await x(t.brake) for x in self.on_brake]
+            await invoke_callbacks(self.on_brake, t.brake)
         if self.last.throttle == 0 and t.throttle > 0:
-            [await x(t.throttle) for x in self.on_throttle]
+            await invoke_callbacks(self.on_throttle, t.throttle)
         if t.engine_rpm > t.min_alert_rpm:
             if not self.above_min_alert_rpm:
                 self.above_min_alert_rpm = True
-                [await x(t.engine_rpm) for x in self.on_shift_light_low]
+                await invoke_callbacks(self.on_shift_light_low, t.engine_rpm)
         elif self.above_min_alert_rpm:
             self.above_min_alert_rpm = False
         if t.engine_rpm > t.max_alert_rpm:
             if not self.above_max_alert_rpm:
                 self.above_max_alert_rpm = True
-                [await x(t.engine_rpm) for x in self.on_shift_light_high]
+                await invoke_callbacks(self.on_shift_light_high, t.engine_rpm)
         elif self.above_max_alert_rpm:
             self.above_max_alert_rpm = False
 

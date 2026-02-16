@@ -3,16 +3,17 @@ import logging
 from enum import Enum
 from typing import Callable, List
 
+from gt_telem.events.event_utils import invoke_callbacks
 from gt_telem.turismo_client import TurismoClient
 
 
 class GameState(Enum):
-    NOT_RUNNING = 0,
-    RUNNING = 1,
-    IN_MENU = 2,
-    AT_TRACK = 3,
-    IN_RACE = 4,
-    PAUSED = 5,
+    NOT_RUNNING = (0,)
+    RUNNING = (1,)
+    IN_MENU = (2,)
+    AT_TRACK = (3,)
+    IN_RACE = (4,)
+    PAUSED = (5,)
     END_RACE = 6
 
 
@@ -48,8 +49,7 @@ class GameEvents:
                 events = self.on_race_end
             case _:
                 events = []
-        for event in events:
-            await event()
+        await invoke_callbacks(events)
         self.game_state = state
 
     @staticmethod
